@@ -5,10 +5,13 @@ This repo is provided as is.
 
 ## Getting Started
 
-See `test_example.py` for an example of each endpoint.
+* Install Python dependencies
+  * `pip3 install -r requirements.txt`
 
-Create a `.env` file and set values to connect to your server.
+* Create a `.env` file and set values to connect to your server.
+  * `hostname` (Example: `http://localhost:8980`)
+  * `username`
+  * `password`
 
-* `hostname` (Example: `http://localhost:8980`)
-* `username`
-* `password`
+
+* See `test_example.py` for an example.
