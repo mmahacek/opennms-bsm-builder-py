@@ -32,7 +32,7 @@ class Endpoint:
         batch_size: int = 100,
         params: dict = {},
     ) -> List[dict]:
-        with tqdm(total=limit, unit="record") as pbar:
+        with tqdm(total=limit, unit="record", desc=f"Pulling {endpoint} data") as pbar:
             result = []
             params["offset"] = 0
             if limit > batch_size:

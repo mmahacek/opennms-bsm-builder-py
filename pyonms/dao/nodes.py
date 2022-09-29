@@ -45,7 +45,7 @@ class NodeAPI(Endpoint):
         )
         if records == [None]:
             return [None]
-        for record in tqdm(records, unit="node"):
+        for record in tqdm(records, unit="node", desc="Hydrating Node objects"):
             devices.append(self.process_node(record, components=components))
         return devices
 

@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from pyonms.dao import Endpoint
 import pyonms.models.business_service
+import pyonms.models.exceptions
 
 
 class BSMAPI(Endpoint):
@@ -38,7 +39,11 @@ class BSMAPI(Endpoint):
     ) -> List[Union[pyonms.models.business_service.BusinessService, None]]:
         service_list = []
         services = self._get_bsm_ids()
-        for service_url in tqdm(services["business-services"], unit="business-service"):
+        for service_url in tqdm(
+            services["business-services"],
+            unit="business-service",
+            desc="Getting Business Services",
+        ):
             service_record = self._get(uri=f"{self.hostname}{service_url}")
             service_list.append(self.process_bsm(service_record))
         return service_list
@@ -79,9 +84,8 @@ class BSMAPI(Endpoint):
     ) -> pyonms.models.business_service.BusinessService:
         old_bsm_list = self._get_bsm_ids()["business-services"]
         response = self._post(uri=self.url, json=bsm.to_dict())
-        self.reload_bsm_daemon()
         if "constraint [bsm_service_name_key]" in response:
-            return None
+            raise pyonms.models.exceptions.DuplicateEntityException(bsm.name, bsm)
         elif response == "":
             new_bsm_list = self._get_bsm_ids()["business-services"]
             new_bsm = [bsm[26:] for bsm in new_bsm_list if bsm not in old_bsm_list][0]
@@ -90,9 +94,8 @@ class BSMAPI(Endpoint):
     def update_bsm(
         self, id: int, bsm: pyonms.models.business_service.BusinessServiceRequest
     ) -> pyonms.models.business_service.BusinessService:
-        response = self._put(uri=f"{self.url}/{id}", json=bsm.to_dict())
+        response = self._put(uri=f"{self.url}/{id}", json=bsm.to_dict())  # noqa: W0612
         new_bsm = self.get_bsm(id)
-        self.reload_bsm_daemon()
         return new_bsm
 
     def _merge_bsm_request(

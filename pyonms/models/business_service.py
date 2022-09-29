@@ -3,7 +3,8 @@
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import List, Union
-from xml.dom.minidom import Attr
+
+import pyonms.models.exceptions
 
 
 class Severity(Enum):
@@ -179,6 +180,8 @@ class IPServiceEdgeRequest:
     map_function: MapFunction = field(default_factory=_map_function)
 
     def __post_init__(self):
+        if len(self.friendly_name) > 30:
+            raise pyonms.models.exceptions.StringLengthException(30)
         if isinstance(self.map_function, dict):
             self.map_function = MapFunction(**self.map_function)
 
@@ -288,6 +291,32 @@ class BusinessServiceRequest:
         if self.parent_services:
             payload["parent-services"] = self.parent_services
         return payload
+
+    def update_edge(
+        self, ip_edge: IPServiceEdgeRequest = None, child_edge: ChildEdgeRequest = None
+    ):
+        if isinstance(ip_edge, IPServiceEdgeRequest):
+            if ip_edge.ip_service_id in [
+                edge.ip_service_id for edge in self.ip_service_edges
+            ]:
+                self.ip_service_edges.remove(
+                    [
+                        edge
+                        for edge in self.ip_service_edges
+                        if edge.ip_service_id == ip_edge.ip_service_id
+                    ][0]
+                )
+            self.ip_service_edges.append(ip_edge)
+        if isinstance(child_edge, ChildEdgeRequest):
+            if child_edge.child_id in [edge.child_id for edge in self.child_edges]:
+                self.child_edges.remove(
+                    [
+                        edge
+                        for edge in self.child_edges
+                        if edge.child_id == child_edge.child_id
+                    ][0]
+                )
+            self.child_edges.append(child_edge)
 
 
 @dataclass(repr=False)
