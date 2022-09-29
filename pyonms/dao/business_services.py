@@ -1,0 +1,121 @@
+# dao.business_services.py
+
+# cspell:ignore snmpinterfaces, ipinterfaces
+
+from typing import List, Union
+
+from tqdm import tqdm
+
+from pyonms.dao import Endpoint
+import pyonms.models.business_service
+
+
+class BSMAPI(Endpoint):
+    def __init__(self, kwargs):
+        super().__init__(**kwargs)
+        self.url = self.base_v2 + "business-services"
+
+    def get_bsm(
+        self, id: int
+    ) -> Union[pyonms.models.business_service.BusinessService, None]:
+        record = self._get(uri=f"{self.url}/{id}")
+        if record is not None:
+            return self.process_bsm(record)
+        else:
+            return None
+
+    def _get_bsm_ids(
+        self,
+    ) -> List[Union[pyonms.models.business_service.BusinessService, None]]:
+        response = self._get(uri=self.url)
+        if response.get("business-services"):
+            return response
+        else:
+            return {"business-services": []}
+
+    def get_bsms(
+        self,
+    ) -> List[Union[pyonms.models.business_service.BusinessService, None]]:
+        service_list = []
+        services = self._get_bsm_ids()
+        for service_url in tqdm(services["business-services"], unit="business-service"):
+            service_record = self._get(uri=f"{self.hostname}{service_url}")
+            service_list.append(self.process_bsm(service_record))
+        return service_list
+
+    def find_bsm_name(
+        self, name: str
+    ) -> Union[pyonms.models.business_service.BusinessService, None]:
+        services = self._get(uri=self.url)
+        for service_url in services.get("business-services", []):
+            service_record = self._get(uri=f"{self.hostname}{service_url}")
+            if service_record["name"] == name:
+                return self.process_bsm(service_record)
+        return None
+
+    def process_bsm(self, data: dict) -> pyonms.models.business_service.BusinessService:
+        data["ip_services_edges"] = data.get("ip-service-edges", [])
+        data["reduction_key_edges"] = data.get("reduction-key-edges", [])
+        data["child_edges"] = data.get("child-edges", [])
+        data["application_edges"] = data.get("application-edges", [])
+        data["parent_services"] = data.get("parent-services", [])
+        data["reduce_function"] = data.get("reduce-function", [])
+        data["operational_status"] = data.get("operational-status", [])
+        del data["operational-status"]
+        del data["ip-service-edges"]
+        del data["reduction-key-edges"]
+        del data["child-edges"]
+        del data["application-edges"]
+        del data["parent-services"]
+        del data["reduce-function"]
+        business_service = pyonms.models.business_service.BusinessService(**data)
+        return business_service
+
+    def reload_bsm_daemon(self):
+        self._post(uri=f"{self.url}/daemon/reload", json={})
+
+    def create_bsm(
+        self, bsm: pyonms.models.business_service.BusinessServiceRequest
+    ) -> pyonms.models.business_service.BusinessService:
+        old_bsm_list = self._get_bsm_ids()["business-services"]
+        response = self._post(uri=self.url, json=bsm.to_dict())
+        self.reload_bsm_daemon()
+        if "constraint [bsm_service_name_key]" in response:
+            return None
+        elif response == "":
+            new_bsm_list = self._get_bsm_ids()["business-services"]
+            new_bsm = [bsm[26:] for bsm in new_bsm_list if bsm not in old_bsm_list][0]
+            return self.get_bsm(new_bsm)
+
+    def update_bsm(
+        self, id: int, bsm: pyonms.models.business_service.BusinessServiceRequest
+    ) -> pyonms.models.business_service.BusinessService:
+        response = self._put(uri=f"{self.url}/{id}", json=bsm.to_dict())
+        new_bsm = self.get_bsm(id)
+        self.reload_bsm_daemon()
+        return new_bsm
+
+    def _merge_bsm_request(
+        self,
+        bsm: pyonms.models.business_service.BusinessService,
+        request: pyonms.models.business_service.BusinessServiceRequest,
+    ) -> pyonms.models.business_service.BusinessServiceRequest:
+        new_request = bsm.request()
+        new_request.name = request.name
+        new_request.reduce_function = request.reduce_function
+        new_request.attributes = request.attributes
+        for edge in request.ip_service_edges:
+            if edge in new_request.ip_service_edges:
+                new_request.ip_service_edges.remove(edge)
+            new_request.ip_service_edges.append(edge)
+        for edge in request.child_edges:
+            if edge in new_request.child_edges:
+                new_request.child_edges.remove(edge)
+            new_request.child_edges.append(edge)
+        for edge in request.application_edges:
+            new_request.application_edges.append(edge)
+        for edge in request.reduction_key_edges:
+            new_request.reduction_key_edges.append(edge)
+        for parent in request.parent_services:
+            new_request.parent_services.append(parent)
+        return new_request
