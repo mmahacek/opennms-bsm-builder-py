@@ -16,6 +16,15 @@ class Severity(Enum):
     CRITICAL = "Critical"
 
 
+MAP_FUNCTIONS = ["Identity", "Increase", "Decrease", "Ignore", "SetTo"]
+REDUCE_FUNCTIONS = [
+    "HighestSeverity",
+    "HighestSeverityAbove",
+    "Threshold",
+    "ExponentialPropagation",
+]
+
+
 @dataclass
 class Attribute:
     key: str
@@ -32,6 +41,10 @@ class MapFunction:
     properties: dict = field(default_factory=dict)
 
     def __post_init__(self):
+        if self.type not in MAP_FUNCTIONS:
+            raise pyonms.models.exceptions.InvalidValueException(
+                name="MapFunction", value="self.type", valid=MAP_FUNCTIONS
+            )
         if self.type == "SetTo" and self.status:
             self.properties["status"] = self.status.value
         elif self.type == "SetTo" and not self.status and not self.properties:
@@ -50,16 +63,25 @@ class MapFunction:
 @dataclass(repr=False)
 class ReduceFunction:
     type: str = "HighestSeverity"
-    threshold: float = 1
+    threshold: float = 0.5
     above: Severity = Severity.INDETERMINATE
     base: float = 2
     properties: dict = field(default_factory=dict)
 
     def __post_init__(self):
+        if self.type not in REDUCE_FUNCTIONS:
+            raise pyonms.models.exceptions.InvalidValueException(
+                name="ReduceFunction", value=self.type, valid=REDUCE_FUNCTIONS
+            )
         if self.type == "ExponentialPropagation" and not self.properties:
             self.properties["base"] = self.base
-        elif self.type == "Threshold" and not self.properties:
-            self.properties["threshold"] = self.threshold
+        elif self.type == "Threshold":
+            if not self.properties:
+                self.properties["threshold"] = self.threshold
+            if self.threshold > 1:
+                raise pyonms.models.exceptions.InvalidValueException(
+                    name="Threshold", value=self.threshold, valid="decimal between 0-1"
+                )
         elif self.type == "HighestSeverityAbove" and not self.properties:
             self.properties["threshold"] = self.above
 
@@ -256,7 +278,7 @@ class IPServiceEdge:
 @dataclass(repr=False)
 class BusinessServiceRequest:
     name: str
-    attributes: dict = field(default_factory=_base_attributes)
+    attributes: List[Attribute] = field(default_factory=list)
     reduce_function: ReduceFunction = field(default_factory=_reduce_function)
     ip_service_edges: Union[List[IPServiceEdgeRequest], None] = field(
         default_factory=list
@@ -275,8 +297,8 @@ class BusinessServiceRequest:
             "attributes": {"attribute": []},
             "reduce-function": self.reduce_function.to_dict(),
         }
-        if self.attributes.get("attribute"):
-            for attribute in self.attributes["attribute"]:
+        if self.attributes:
+            for attribute in self.attributes:
                 payload["attributes"]["attribute"].append(attribute.to_dict())
         if self.reduction_key_edges:
             payload["reduction-key-edges"] = self.reduction_key_edges
@@ -291,6 +313,13 @@ class BusinessServiceRequest:
         if self.parent_services:
             payload["parent-services"] = self.parent_services
         return payload
+
+    def add_attribute(self, attribute: Attribute):
+        if attribute.key in [param.key for param in self.attributes]:
+            self.attributes.remove(
+                [param for param in self.attributes if param.key == attribute.key][0]
+            )
+        self.attributes.append(attribute)
 
     def update_edge(
         self, ip_edge: IPServiceEdgeRequest = None, child_edge: ChildEdgeRequest = None
@@ -325,7 +354,7 @@ class BusinessService:
     location: str
     operational_status: str
     name: str
-    attributes: dict = field(default_factory=_base_attributes)
+    attributes: List[Attribute] = field(default_factory=list)
     reduce_function: ReduceFunction = field(default_factory=_reduce_function)
     ip_services_edges: Union[List[IPServiceEdge], None] = field(default_factory=list)
     reduction_key_edges: Union[list, None] = field(default_factory=list)
@@ -333,12 +362,13 @@ class BusinessService:
     application_edges: Union[list, None] = field(default_factory=list)
     parent_services: Union[list, None] = field(default_factory=list)
 
-    def __post_init__(self):
-        if self.attributes.get("attribute"):
-            attributes = []
-            for attribute in self.attributes.get("attribute"):
-                attributes.append(Attribute(**attribute))
-            self.attributes["attribute"] = attributes
+    def __post_init__(self):  # noqa C901
+        if self.attributes:
+            if isinstance(self.attributes, dict):
+                attributes = []
+                for attribute in self.attributes.get("attribute"):
+                    attributes.append(Attribute(**attribute))
+            self.attributes = attributes
         if self.ip_services_edges:
             if isinstance(self.ip_services_edges[0], dict):
                 ip_edges = []
