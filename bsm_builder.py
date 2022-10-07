@@ -98,68 +98,69 @@ if __name__ == "__main__":  # noqa: C901
             new_bsm.add_attribute(Attribute(key="model", value="device"))
             for node in data["nodes"]:
                 for ip in node["node"].ipInterfaces:
-                    for service in ip.services:
-                        if (
-                            service not in used_services
-                            and "ICMP" in service.serviceType.name
-                        ):
-                            friendly_name = f"{group}{node['function']}-{service.serviceType.name}".replace(
-                                "Flexware-", ""
-                            )
-                            friendly_name = (
-                                node["function"]
-                                .replace("-", "")
-                                .replace("S", "SAOS")
-                                .replace("VMR", "Vyatta")
-                                .replace("vFW", "Velo")
-                            )
+                    if ip.snmpPrimary.value == "P":
+                        for service in ip.services:
+                            if (
+                                service not in used_services
+                                and "ICMP" in service.serviceType.name
+                            ):
+                                friendly_name = f"{group}{node['function']}-{service.serviceType.name}".replace(
+                                    "Flexware-", ""
+                                )
+                                friendly_name = (
+                                    node["function"]
+                                    .replace("-", "")
+                                    .replace("S", "SAOS")
+                                    .replace("VMR", "Vyatta")
+                                    .replace("vFW", "Velo")
+                                )
 
-                            if node["function"] == "S":
-                                new_bsm.update_edge(
-                                    ip_edge=IPServiceEdgeRequest(
-                                        friendly_name=friendly_name,
-                                        ip_service_id=service.id,
-                                        map_function=MapFunction(
-                                            type="SetTo", status=Severity.CRITICAL
-                                        ),
+                                if node["function"] == "S":
+                                    new_bsm.update_edge(
+                                        ip_edge=IPServiceEdgeRequest(
+                                            friendly_name=friendly_name,
+                                            ip_service_id=service.id,
+                                            map_function=MapFunction(
+                                                type="SetTo", status=Severity.CRITICAL
+                                            ),
+                                        )
                                     )
-                                )
-                                used_services.append(service)
-                            elif node["function"] == "DNFVI":
-                                new_bsm.update_edge(
-                                    ip_edge=IPServiceEdgeRequest(
-                                        friendly_name=friendly_name,
-                                        ip_service_id=service.id,
-                                        map_function=MapFunction(
-                                            type="SetTo",
-                                            status=Severity.MAJOR,
-                                        ),
+                                    used_services.append(service)
+                                elif node["function"] == "DNFVI":
+                                    new_bsm.update_edge(
+                                        ip_edge=IPServiceEdgeRequest(
+                                            friendly_name=friendly_name,
+                                            ip_service_id=service.id,
+                                            map_function=MapFunction(
+                                                type="SetTo",
+                                                status=Severity.MAJOR,
+                                            ),
+                                        )
                                     )
-                                )
-                                used_services.append(service)
-                            elif node["function"] == "VMR":
-                                new_bsm.update_edge(
-                                    ip_edge=IPServiceEdgeRequest(
-                                        friendly_name=friendly_name,
-                                        ip_service_id=service.id,
-                                        map_function=MapFunction(
-                                            type="SetTo",
-                                            status=Severity.MINOR,
-                                        ),
+                                    used_services.append(service)
+                                elif node["function"] == "VMR":
+                                    new_bsm.update_edge(
+                                        ip_edge=IPServiceEdgeRequest(
+                                            friendly_name=friendly_name,
+                                            ip_service_id=service.id,
+                                            map_function=MapFunction(
+                                                type="SetTo",
+                                                status=Severity.MINOR,
+                                            ),
+                                        )
                                     )
-                                )
-                                used_services.append(service)
-                            else:
-                                new_bsm.update_edge(
-                                    ip_edge=IPServiceEdgeRequest(
-                                        friendly_name=friendly_name,
-                                        ip_service_id=service.id,
-                                        map_function=MapFunction(
-                                            type="SetTo", status=Severity.WARNING
-                                        ),
+                                    used_services.append(service)
+                                else:
+                                    new_bsm.update_edge(
+                                        ip_edge=IPServiceEdgeRequest(
+                                            friendly_name=friendly_name,
+                                            ip_service_id=service.id,
+                                            map_function=MapFunction(
+                                                type="SetTo", status=Severity.WARNING
+                                            ),
+                                        )
                                     )
-                                )
-                                used_services.append(service)
+                                    used_services.append(service)
             if switch_bsm:
                 new_parent_bsm = my_server.bsm.update_bsm(bsm=new_bsm, id=switch_bsm.id)
             else:
@@ -174,7 +175,7 @@ if __name__ == "__main__":  # noqa: C901
             site_bsm_update.update_edge(
                 child_edge=ChildEdgeRequest(
                     child_id=new_parent_bsm.id,
-                    map_function=MapFunction(type="Decrease"),
+                    map_function=MapFunction(type="Identity"),
                 )
             )
             site_bsms[data["parent"]] = my_server.bsm.update_bsm(

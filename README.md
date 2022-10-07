@@ -14,4 +14,4 @@ This repo is provided as is.
   * `password`
 
 
-* See `test_example.py` for an example.
+* See `bsm_builder.py` for an example.
