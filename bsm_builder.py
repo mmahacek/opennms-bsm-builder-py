@@ -21,7 +21,7 @@ from pyonms.models.business_service import (
 
 def get_bsm_list(my_server: PyONMS, all_bsms: list):
     nodes = my_server.nodes.get_nodes(
-        limit=0, batch_size=100, components=[NodeComponents.IP]
+        limit=0, batch_size=100, components=[NodeComponents.IP], threads=10
     )
 
     bsm_list = {}
@@ -92,10 +92,8 @@ def process_instance(my_server: PyONMS):  # noqa: C901
                     if ip.snmpPrimary.value == "P":
                         for service in ip.services:
                             if "ICMP" in service.serviceType.name:
-                                friendly_name = (
-                                    f"{group}-{node['instance']}-{node['function']}"
-                                )
-
+                                # friendly_name = f"{group}-{node['instance']}-{node['function']}"
+                                friendly_name = node["node"].label
                                 if node["function"] == "S":
                                     new_bsm.update_edge(
                                         ip_edge=IPServiceEdgeRequest(

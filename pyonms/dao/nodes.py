@@ -2,6 +2,7 @@
 
 # cspell:ignore snmpinterfaces, ipinterfaces
 
+import concurrent.futures
 from enum import Enum
 from typing import List, Union
 
@@ -32,7 +33,7 @@ class NodeAPI(Endpoint):
             return None
 
     def get_nodes(
-        self, limit=100, batch_size=100, components: list = []
+        self, limit=100, batch_size=100, components: list = [], threads: int = 10
     ) -> List[Union[pyonms.models.node.Node, None]]:
         devices = []
         params = {}
@@ -45,8 +46,20 @@ class NodeAPI(Endpoint):
         )
         if records == [None]:
             return [None]
-        for record in tqdm(records, unit="node", desc="Hydrating Node objects"):
-            devices.append(self.process_node(record, components=components))
+        with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
+            with tqdm(
+                total=len(records), unit="node", desc="Hydrating Node objects"
+            ) as progress:
+                futures = []
+                for record in records:
+                    future = pool.submit(
+                        self.process_node, data=record, components=components
+                    )
+                    future.add_done_callback(lambda p: progress.update())
+                    futures.append(future)
+                for future in futures:
+                    result = future.result()
+                    devices.append(result)
         return devices
 
     def get_node_snmpinterfaces(
