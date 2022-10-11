@@ -4,9 +4,12 @@ from typing import List
 
 
 class StringLengthException(Exception):
-    def __init__(self, length: int):
+    def __init__(self, length: int, value: str = None):
         self.max_length = length
+        self.value = value
         self.message = f"String length must be under {self.max_length} characters."
+        if self.value:
+            self.message += f" Value was '{self.value}'."
         super().__init__(self.message)
 
 

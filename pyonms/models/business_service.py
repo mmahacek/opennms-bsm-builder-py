@@ -203,7 +203,9 @@ class IPServiceEdgeRequest:
 
     def __post_init__(self):
         if len(self.friendly_name) > 30:
-            raise pyonms.models.exceptions.StringLengthException(30)
+            raise pyonms.models.exceptions.StringLengthException(
+                30, value=self.friendly_name
+            )
         if isinstance(self.map_function, dict):
             self.map_function = MapFunction(**self.map_function)
 
