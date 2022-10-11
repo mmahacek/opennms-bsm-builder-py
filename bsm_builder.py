@@ -2,6 +2,7 @@
 
 import re
 
+from typing import List
 from tqdm import tqdm
 
 from instances import instances
@@ -9,6 +10,7 @@ from instances import instances
 from pyonms import PyONMS
 from pyonms.dao.nodes import NodeComponents
 from pyonms.models.business_service import (
+    BusinessService,
     BusinessServiceRequest,
     IPServiceEdgeRequest,
     MapFunction,
@@ -53,8 +55,19 @@ def get_bsm_list(my_server: PyONMS, all_bsms: list):
     return bsm_list
 
 
+def cleanup_bsms(my_server: PyONMS, all_bsms: List[BusinessService]):
+    for bsm in all_bsms:
+        if (
+            not bsm.application_edges
+            and not bsm.child_edges
+            and not bsm.ip_services_edges
+            and not bsm.reduction_key_edges
+        ):
+            my_server.bsm.delete_bsm(bsm.id)
+
+
 def process_instance(my_server: PyONMS):  # noqa: C901
-    overall_progress = tqdm(desc="Overall progress", unit="step", total=3)
+    overall_progress = tqdm(desc="Overall progress", unit="step", total=4)
     all_bsms = my_server.bsm.get_bsms()
 
     overall_progress.update(1)
@@ -134,6 +147,9 @@ def process_instance(my_server: PyONMS):  # noqa: C901
                 all_bsms.append(new_site_bsm)
             progress_bar.update(1)
     my_server.bsm.reload_bsm_daemon()
+    overall_progress.update(1)
+    overall_progress.set_description(desc="Removing empty services")
+    cleanup_bsms(my_server, all_bsms)
     overall_progress.update(1)
     pass
 

@@ -95,6 +95,8 @@ class AssetRecord:
     description: str = None
     username: str = None
     serialNumber: str = None
+    address1: str = None
+    address2: str = None
     city: str = None
     state: str = None
     zip: str = None

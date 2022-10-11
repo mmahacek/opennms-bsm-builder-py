@@ -122,3 +122,6 @@ class BSMAPI(Endpoint):
         for parent in request.parent_services:
             new_request.parent_services.append(parent)
         return new_request
+
+    def delete_bsm(self, id: int):
+        self._delete(uri=f"{self.url}/{id}")
