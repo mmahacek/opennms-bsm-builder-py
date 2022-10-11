@@ -46,6 +46,8 @@ class NodeAPI(Endpoint):
         )
         if records == [None]:
             return [None]
+        if threads > len(records):
+            threads = len(records)
         with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
             with tqdm(
                 total=len(records), unit="node", desc="Hydrating Node objects"

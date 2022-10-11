@@ -81,22 +81,15 @@ class BSMAPI(Endpoint):
 
     def create_bsm(
         self, bsm: pyonms.models.business_service.BusinessServiceRequest
-    ) -> pyonms.models.business_service.BusinessService:
-        old_bsm_list = self._get_bsm_ids()["business-services"]
+    ):
         response = self._post(uri=self.url, json=bsm.to_dict())
         if "constraint [bsm_service_name_key]" in response:
             raise pyonms.models.exceptions.DuplicateEntityException(bsm.name, bsm)
-        elif response == "":
-            new_bsm_list = self._get_bsm_ids()["business-services"]
-            new_bsm = [bsm[26:] for bsm in new_bsm_list if bsm not in old_bsm_list][0]
-            return self.get_bsm(new_bsm)
 
     def update_bsm(
         self, id: int, bsm: pyonms.models.business_service.BusinessServiceRequest
-    ) -> pyonms.models.business_service.BusinessService:
-        response = self._put(uri=f"{self.url}/{id}", json=bsm.to_dict())  # noqa: W0612
-        new_bsm = self.get_bsm(id)
-        return new_bsm
+    ):
+        self._put(uri=f"{self.url}/{id}", json=bsm.to_dict())  # noqa: W0612
 
     def _merge_bsm_request(
         self,
