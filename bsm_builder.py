@@ -1,5 +1,6 @@
 # test.py
 
+import concurrent.futures
 import re
 
 from typing import List
@@ -37,7 +38,7 @@ def get_bsm_list(my_server: PyONMS, all_bsms: list):
                 "node": node,
                 "instance": match.group("instance"),
                 "function": match.group("function"),
-                "friendly_name": f'{match.group("host")}{match.group("instance")}{match.group("function")}',
+                "friendly_name": f'{match.group("instance")}{match.group("function")}',
             }
             if bsm_list.get(node.assetRecord.displayCategory):
                 bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
@@ -77,80 +78,91 @@ def process_instance(my_server: PyONMS):  # noqa: C901
 
     overall_progress.update(1)
 
-    with tqdm(
-        unit="site", desc="Updating BSM models", total=len(bsm_list.keys())
-    ) as progress_bar:
-        for group, data in bsm_list.items():
-            progress_bar.set_description(f"Updating {group} BSM model")
-            site_bsm = my_server.bsm.find_bsm_name(name=group)
-            if site_bsm:
-                new_bsm = site_bsm.request()
-            else:
-                new_bsm = BusinessServiceRequest(name=group)
-            new_bsm.add_attribute(Attribute(key="model", value="device"))
-            for node in data["nodes"]:
-                for ip in node["node"].ipInterfaces:
-                    if ip.snmpPrimary.value == "P":
-                        for service in ip.services:
-                            if "ICMP" in service.serviceType.name:
-                                # friendly_name = f"{group}-{node['instance']}-{node['function']}"
-                                friendly_name = node["friendly_name"]
-                                if node["function"] == "S":
-                                    new_bsm.update_edge(
-                                        ip_edge=IPServiceEdgeRequest(
-                                            friendly_name=friendly_name,
-                                            ip_service_id=service.id,
-                                            map_function=MapFunction(
-                                                type="SetTo", status=Severity.CRITICAL
-                                            ),
-                                        )
-                                    )
-                                elif node["function"] == "DNFVI":
-                                    new_bsm.update_edge(
-                                        ip_edge=IPServiceEdgeRequest(
-                                            friendly_name=friendly_name,
-                                            ip_service_id=service.id,
-                                            map_function=MapFunction(
-                                                type="SetTo",
-                                                status=Severity.MAJOR,
-                                            ),
-                                        )
-                                    )
-                                elif node["function"] == "VMR":
-                                    new_bsm.update_edge(
-                                        ip_edge=IPServiceEdgeRequest(
-                                            friendly_name=friendly_name,
-                                            ip_service_id=service.id,
-                                            map_function=MapFunction(
-                                                type="SetTo",
-                                                status=Severity.MINOR,
-                                            ),
-                                        )
-                                    )
-                                else:
-                                    new_bsm.update_edge(
-                                        ip_edge=IPServiceEdgeRequest(
-                                            friendly_name=friendly_name,
-                                            ip_service_id=service.id,
-                                            map_function=MapFunction(
-                                                type="SetTo", status=Severity.WARNING
-                                            ),
-                                        )
-                                    )
-            if site_bsm:
-                new_site_bsm = my_server.bsm.update_bsm(bsm=new_bsm, id=site_bsm.id)
-            else:
-                new_site_bsm = my_server.bsm.create_bsm(new_bsm)
-            data["new"] = new_site_bsm
-            if new_site_bsm not in [bsm.id for bsm in all_bsms]:
-                all_bsms.append(new_site_bsm)
-            progress_bar.update(1)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=10) as pool:
+        with tqdm(
+            total=len(bsm_list.keys()), unit="site", desc="Updating BSM models"
+        ) as progress:
+            futures = []
+            for group, data in bsm_list.items():
+                future = pool.submit(
+                    process_site, my_server=my_server, group=group, data=data
+                )
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+            for future in futures:
+                result = future.result()
+            #   devices.append(result)
+
     my_server.bsm.reload_bsm_daemon()
     overall_progress.update(1)
     overall_progress.set_description(desc="Removing empty services")
+    all_bsms = my_server.bsm.get_bsms()
     cleanup_bsms(my_server, all_bsms)
     overall_progress.update(1)
     pass
+
+
+def process_site(my_server, group, data):  # noqa: C901
+    site_bsm = my_server.bsm.find_bsm_name(name=group)
+    if site_bsm:
+        new_bsm = site_bsm.request()
+    else:
+        new_bsm = BusinessServiceRequest(name=group)
+    new_bsm.add_attribute(Attribute(key="model", value="device"))
+    for node in data["nodes"]:
+        for ip in node["node"].ipInterfaces:
+            if ip.snmpPrimary.value == "P":
+                for service in ip.services:
+                    if "ICMP" in service.serviceType.name:
+                        # friendly_name = f"{group}-{node['instance']}-{node['function']}"
+                        friendly_name = node["friendly_name"]
+                        if node["function"] == "S":
+                            new_bsm.update_edge(
+                                ip_edge=IPServiceEdgeRequest(
+                                    friendly_name=friendly_name,
+                                    ip_service_id=service.id,
+                                    map_function=MapFunction(
+                                        type="SetTo", status=Severity.CRITICAL
+                                    ),
+                                )
+                            )
+                        elif node["function"] == "DNFVI":
+                            new_bsm.update_edge(
+                                ip_edge=IPServiceEdgeRequest(
+                                    friendly_name=friendly_name,
+                                    ip_service_id=service.id,
+                                    map_function=MapFunction(
+                                        type="SetTo",
+                                        status=Severity.MAJOR,
+                                    ),
+                                )
+                            )
+                        elif node["function"] == "VMR":
+                            new_bsm.update_edge(
+                                ip_edge=IPServiceEdgeRequest(
+                                    friendly_name=friendly_name,
+                                    ip_service_id=service.id,
+                                    map_function=MapFunction(
+                                        type="SetTo",
+                                        status=Severity.MINOR,
+                                    ),
+                                )
+                            )
+                        else:
+                            new_bsm.update_edge(
+                                ip_edge=IPServiceEdgeRequest(
+                                    friendly_name=friendly_name,
+                                    ip_service_id=service.id,
+                                    map_function=MapFunction(
+                                        type="SetTo", status=Severity.WARNING
+                                    ),
+                                )
+                            )
+    if site_bsm:
+        new_site_bsm = my_server.bsm.update_bsm(bsm=new_bsm, id=site_bsm.id)
+    else:
+        new_site_bsm = my_server.bsm.create_bsm(new_bsm)
+    data["new"] = new_site_bsm
 
 
 if __name__ == "__main__":  # noqa: C901
