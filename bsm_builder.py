@@ -21,7 +21,7 @@ from pyonms.models.business_service import (
 
 def get_bsm_list(my_server: PyONMS, all_bsms: list):
     nodes = my_server.nodes.get_nodes(
-        limit=0, batch_size=100, components=[NodeComponents.IP], threads=10
+        limit=0, batch_size=100, components=[NodeComponents.IP], threads=25
     )
 
     bsm_list = {}
@@ -37,6 +37,7 @@ def get_bsm_list(my_server: PyONMS, all_bsms: list):
                 "node": node,
                 "instance": match.group("instance"),
                 "function": match.group("function"),
+                "friendly_name": f'{match.group("host")}{match.group("instance")}{match.group("function")}',
             }
             if bsm_list.get(node.assetRecord.displayCategory):
                 bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
@@ -93,7 +94,7 @@ def process_instance(my_server: PyONMS):  # noqa: C901
                         for service in ip.services:
                             if "ICMP" in service.serviceType.name:
                                 # friendly_name = f"{group}-{node['instance']}-{node['function']}"
-                                friendly_name = node["node"].label
+                                friendly_name = node["friendly_name"]
                                 if node["function"] == "S":
                                     new_bsm.update_edge(
                                         ip_edge=IPServiceEdgeRequest(

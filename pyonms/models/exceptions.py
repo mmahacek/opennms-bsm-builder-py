@@ -9,7 +9,7 @@ class StringLengthException(Exception):
         self.value = value
         self.message = f"String length must be under {self.max_length} characters."
         if self.value:
-            self.message += f" Value was '{self.value}'."
+            self.message += f" Value '{self.value}' was {len(self.value)} characters."
         super().__init__(self.message)
 
 
