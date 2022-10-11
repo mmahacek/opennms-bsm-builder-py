@@ -8,10 +8,15 @@ This repo is provided as is.
 * Install Python dependencies
   * `pip3 install -r requirements.txt`
 
-* Create a `.env` file and set values to connect to your server.
-  * `hostname` (Example: `http://localhost:8980`)
-  * `username`
-  * `password`
-
-
+* Create a `instances.py` file to define your list of servers to process.
+  * The file should have the following structure, repeating for each server instance to process:
+```py
+instances = {
+    "horizon_1": {
+        "hostname": "http://localhost:8980/opennms/",
+        "username": "admin",
+        "password": "admin",
+    },
+}
+```
 * See `bsm_builder.py` for an example.
