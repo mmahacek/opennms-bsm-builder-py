@@ -177,7 +177,7 @@ def main():
     hostname = os.getenv("bsm_hostname")
     username = os.getenv("bsm_username")
     password = os.getenv("bsm_password")
-    if not hostname:
+    if not hostname and not username and not password:
         from instances import instances
 
         for instance in instances.values():
