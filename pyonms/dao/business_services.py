@@ -15,13 +15,18 @@ class BSMAPI(Endpoint):
     def __init__(self, kwargs):
         super().__init__(**kwargs)
         self.url = self.base_v2 + "business-services"
+        self.cache = {}
+        self.cache_name = {}
 
     def get_bsm(
         self, id: int
     ) -> Union[pyonms.models.business_service.BusinessService, None]:
         record = self._get(uri=f"{self.url}/{id}")
         if record is not None:
-            return self.process_bsm(record)
+            bsm = self.process_bsm(record)
+            self.cache[bsm.id] = bsm
+            self.cache_name[bsm.name] = bsm.id
+            return bsm
         else:
             return None
 
@@ -44,18 +49,23 @@ class BSMAPI(Endpoint):
             unit="business-service",
             desc="Getting Business Services",
         ):
-            service_record = self._get(uri=f"{self.hostname}{service_url}")
-            service_list.append(self.process_bsm(service_record))
+            service_record = self.get_bsm(id=service_url[26:])
+            service_list.append(service_record)
         return service_list
 
     def find_bsm_name(
-        self, name: str
+        self, name: str, cache_only: bool = False
     ) -> Union[pyonms.models.business_service.BusinessService, None]:
-        services = self._get(uri=self.url)
-        for service_url in services.get("business-services", []):
-            service_record = self._get(uri=f"{self.hostname}{service_url}")
-            if service_record["name"] == name:
-                return self.process_bsm(service_record)
+        if self.cache_name.get(name):
+            return self.cache[self.cache_name[name]]
+        elif cache_only:
+            return None
+        else:
+            services = self._get(uri=self.url)
+            for service_url in services.get("business-services", []):
+                service_record = self._get(uri=f"{self.hostname}{service_url}")
+                if service_record["name"] == name:
+                    return self.process_bsm(service_record)
         return None
 
     def process_bsm(self, data: dict) -> pyonms.models.business_service.BusinessService:

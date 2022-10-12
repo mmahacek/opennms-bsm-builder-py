@@ -3,6 +3,7 @@
 import concurrent.futures
 import os
 import re
+import time
 
 from dotenv import load_dotenv
 
@@ -23,8 +24,8 @@ from pyonms.models.business_service import (
 load_dotenv()
 
 
-def get_bsm_list(my_server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
-    nodes = my_server.nodes.get_nodes(
+def get_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
+    nodes = server.nodes.get_nodes(
         limit=0, batch_size=100, components=[NodeComponents.IP], threads=threads
     )
 
@@ -60,15 +61,15 @@ def get_bsm_list(my_server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
     return bsm_list
 
 
-def cleanup_bsms(my_server: PyONMS, all_bsms: List[BusinessService]) -> None:
-    for bsm in tqdm(all_bsms, desc="Cleaning up empty BSMs", unit="bsm"):
+def cleanup_bsms(server: PyONMS, all_bsms: List[BusinessService]) -> None:
+    for bsm in tqdm(all_bsms, desc="Checking for empty BSMs", unit="bsm"):
         if (
             not bsm.application_edges
             and not bsm.child_edges
             and not bsm.ip_services_edges
             and not bsm.reduction_key_edges
         ):
-            my_server.bsm.delete_bsm(bsm.id)
+            server.bsm.delete_bsm(bsm.id)
 
 
 def generate_ip_edge(
@@ -109,8 +110,8 @@ def generate_ip_edge(
         )
 
 
-def process_site(my_server: PyONMS, group: str, data: dict) -> str:
-    old_bsm = my_server.bsm.find_bsm_name(name=group)
+def process_site(server: PyONMS, group: str, data: dict) -> str:
+    old_bsm = server.bsm.find_bsm_name(name=group, cache_only=True)
     if old_bsm:
         new_bsm = old_bsm.request()
     else:
@@ -129,38 +130,47 @@ def process_site(my_server: PyONMS, group: str, data: dict) -> str:
                         )
                         new_bsm.update_edge(ip_edge=edge)
     if old_bsm:
-        my_server.bsm.update_bsm(bsm=new_bsm, id=old_bsm.id)
+        server.bsm.update_bsm(bsm=new_bsm, id=old_bsm.id)
     else:
-        my_server.bsm.create_bsm(new_bsm)
+        server.bsm.create_bsm(new_bsm)
     return group
 
 
-def process_instance(my_server: PyONMS, threads: int = 10) -> None:
-    all_bsms = my_server.bsm.get_bsms()
+def process_instance(server: PyONMS, threads: int = 10) -> None:
+    server.bsm.reload_bsm_daemon()
+    all_bsms = server.bsm.get_bsms()
 
-    bsm_list = get_bsm_list(my_server, all_bsms, threads)
+    bsm_list = get_bsm_list(server=server, all_bsms=all_bsms, threads=threads)
 
     if threads > len(bsm_list.keys()):
         threads = len(bsm_list.keys())
-    with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
         with tqdm(
             total=len(bsm_list.keys()), unit="site", desc="Updating BSM models"
         ) as progress:
             futures = []
             for group, data in bsm_list.items():
                 future = pool.submit(
-                    process_site, my_server=my_server, group=group, data=data
+                    process_site, server=server, group=group, data=data
                 )
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
             results = []
             for future in futures:
-                result = future.result()
+                try:
+                    result = future.result()
+                except Exception as e:
+                    print(f"{e}")
+                    time.sleep(5)
+                    future = pool.submit(
+                        process_site, server=server, group=group, data=data
+                    )
+                    result = future.result()
                 results.append(result)
 
-    my_server.bsm.reload_bsm_daemon()
-    all_bsms = my_server.bsm.get_bsms()
-    cleanup_bsms(my_server, all_bsms)
+    server.bsm.reload_bsm_daemon()
+    all_bsms = server.bsm.get_bsms()
+    cleanup_bsms(server=server, all_bsms=all_bsms)
 
 
 def main():
@@ -179,7 +189,7 @@ def main():
             f.write(f"hostname={hostname}\n")
             f.write(f"username={username}\n")
             f.write(f"password={password}\n")
-    server = PyONMS(hostname, username, password)
+    server = PyONMS(hostname=hostname, username=username, password=password)
     process_instance(server, threads=25)
 
 
