@@ -5,12 +5,14 @@ This repo is provided as is.
 
 ## Getting Started
 
-* Install Python dependencies
+* Install Python dependencies.
   * `pip3 install -r requirements.txt`
 
 * Create a `.env` file and set values to connect to your server.
-  * `hostname=http://localhost:8980`)
-  * `username=admin`
-  * `password=admin`
+  * `bsm_hostname=http://localhost:8980`)
+  * `bsm_username=admin`
+  * `bsm_password=admin`
+
+* ALTERNATIVELY, you can set those three values as environment variables instead of creating a `.env` file.
 
 * See `bsm_builder.py` for an example.

@@ -174,9 +174,9 @@ def process_instance(server: PyONMS, threads: int = 10) -> None:
 
 
 def main():
-    hostname = os.getenv("hostname")
-    username = os.getenv("username")
-    password = os.getenv("password")
+    hostname = os.getenv("bsm_hostname")
+    username = os.getenv("bsm_username")
+    password = os.getenv("bsm_password")
     if not hostname:
         from instances import instances
 
@@ -186,9 +186,9 @@ def main():
             password = instance["password"]
             break
         with open(".env", "w") as f:
-            f.write(f"hostname={hostname}\n")
-            f.write(f"username={username}\n")
-            f.write(f"password={password}\n")
+            f.write(f"bsm_hostname={hostname}\n")
+            f.write(f"bsm_username={username}\n")
+            f.write(f"bsm_password={password}\n")
     server = PyONMS(hostname=hostname, username=username, password=password)
     process_instance(server, threads=25)
 
