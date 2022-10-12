@@ -79,12 +79,10 @@ class BSMAPI(Endpoint):
     def reload_bsm_daemon(self):
         self._post(uri=f"{self.url}/daemon/reload", json={})
 
-    def create_bsm(
-        self, bsm: pyonms.models.business_service.BusinessServiceRequest
-    ):
+    def create_bsm(self, bsm: pyonms.models.business_service.BusinessServiceRequest):
         response = self._post(uri=self.url, json=bsm.to_dict())
         if "constraint [bsm_service_name_key]" in response:
-            raise pyonms.models.exceptions.DuplicateEntityException(bsm.name, bsm)
+            raise pyonms.models.exceptions.DuplicateEntityError(bsm.name, bsm)
 
     def update_bsm(
         self, id: int, bsm: pyonms.models.business_service.BusinessServiceRequest

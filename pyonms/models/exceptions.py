@@ -3,7 +3,7 @@
 from typing import List
 
 
-class StringLengthException(Exception):
+class StringLengthError(Exception):
     def __init__(self, length: int, value: str = None):
         self.max_length = length
         self.value = value
@@ -13,7 +13,7 @@ class StringLengthException(Exception):
         super().__init__(self.message)
 
 
-class DuplicateEntityException(Exception):
+class DuplicateEntityError(Exception):
     def __init__(self, name: str, model):
         self.name = name
         self.model = model
