@@ -21,7 +21,7 @@ class DuplicateEntityError(Exception):
         super().__init__(self.message)
 
 
-class InvalidValueException(Exception):
+class InvalidValueError(Exception):
     def __init__(self, name: str, value: str, valid: List[str] = None):
         self.name = name
         self.value = value

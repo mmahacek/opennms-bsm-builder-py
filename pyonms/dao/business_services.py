@@ -2,7 +2,8 @@
 
 # cspell:ignore snmpinterfaces, ipinterfaces
 
-from typing import List, Union
+import concurrent.futures
+from typing import List, Optional
 
 from tqdm import tqdm
 
@@ -20,7 +21,7 @@ class BSMAPI(Endpoint):
 
     def get_bsm(
         self, id: int
-    ) -> Union[pyonms.models.business_service.BusinessService, None]:
+    ) -> Optional[pyonms.models.business_service.BusinessService]:
         record = self._get(uri=f"{self.url}/{id}")
         if record is not None:
             bsm = self.process_bsm(record)
@@ -32,7 +33,7 @@ class BSMAPI(Endpoint):
 
     def _get_bsm_ids(
         self,
-    ) -> List[Union[pyonms.models.business_service.BusinessService, None]]:
+    ) -> dict:
         response = self._get(uri=self.url)
         if response.get("business-services"):
             return response
@@ -40,22 +41,36 @@ class BSMAPI(Endpoint):
             return {"business-services": []}
 
     def get_bsms(
-        self,
-    ) -> List[Union[pyonms.models.business_service.BusinessService, None]]:
+        self, threads: int = 10
+    ) -> List[Optional[pyonms.models.business_service.BusinessService]]:
         service_list = []
         services = self._get_bsm_ids()
-        for service_url in tqdm(
-            services["business-services"],
-            unit="business-service",
-            desc="Getting Business Services",
-        ):
-            service_record = self.get_bsm(id=service_url[26:])
-            service_list.append(service_record)
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
+            with tqdm(
+                total=len(services["business-services"]),
+                unit="business-service",
+                desc="Getting Business Services",
+            ) as progress:
+                futures = []
+                for service_url in services["business-services"]:
+                    future = pool.submit(
+                        self.get_bsm,
+                        id=service_url[26:],
+                    )
+                    future.add_done_callback(lambda p: progress.update())
+                    futures.append(future)
+                for future in futures:
+                    bsm = future.result()
+                    self.cache[bsm.id] = bsm
+                    self.cache_name[bsm.name] = bsm.id
+                    service_list.append(bsm)
+
         return service_list
 
     def find_bsm_name(
         self, name: str, cache_only: bool = False
-    ) -> Union[pyonms.models.business_service.BusinessService, None]:
+    ) -> Optional[pyonms.models.business_service.BusinessService]:
         if self.cache_name.get(name):
             return self.cache[self.cache_name[name]]
         elif cache_only:

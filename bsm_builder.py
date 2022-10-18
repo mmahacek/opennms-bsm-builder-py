@@ -1,13 +1,14 @@
 # test.py
 
 import concurrent.futures
+import logging
 import os
 import re
 import time
 
-from dotenv import load_dotenv
-
 from typing import List
+
+from dotenv import load_dotenv
 from tqdm import tqdm
 
 from pyonms import PyONMS
@@ -23,12 +24,29 @@ from pyonms.models.business_service import (
 
 load_dotenv()
 
+LOG_PATH = os.environ.get("log_path", "./bsm.log").replace(
+    "DATE", time.strftime("%Y-%m-%d")
+)
 
-def get_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
+log_formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] (Thread-%(thread)s) %(message)s"
+)
+logger = logging.getLogger("bsm_builder")
+logger.setLevel(logging.DEBUG)
+fh = logging.FileHandler(LOG_PATH)
+fh.setFormatter(log_formatter)
+fh.setLevel(logging.DEBUG)
+
+logger.addHandler(fh)
+
+
+def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
+    logger.info("Gathering nodes from inventory")
     nodes = server.nodes.get_nodes(
         limit=0, batch_size=100, components=[NodeComponents.IP], threads=threads
     )
-
+    logger.info(f"Found {len(nodes)} nodes")
+    logger.info("Parsing nodes into site groupings")
     bsm_list = {}
     for node in nodes:
         if not node.assetRecord.displayCategory:
@@ -57,11 +75,13 @@ def get_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
             if group == bsm.name:
                 data["bsm"] = bsm
                 break
-
+    logger.info(f"Found {len(bsm_list)} sites")
+    logger.info("Completed group generation")
     return bsm_list
 
 
 def cleanup_bsms(server: PyONMS, all_bsms: List[BusinessService]) -> None:
+    logger.info("Starting cleanup of empty Business Services")
     for bsm in tqdm(all_bsms, desc="Checking for empty BSMs", unit="bsm"):
         if (
             not bsm.application_edges
@@ -70,6 +90,8 @@ def cleanup_bsms(server: PyONMS, all_bsms: List[BusinessService]) -> None:
             and not bsm.reduction_key_edges
         ):
             server.bsm.delete_bsm(bsm.id)
+            logging.info(f"Removed {bsm.name}: No nodes for site in inventory.")
+    logger.info("Completed cleanup of empty Business Services")
 
 
 def generate_ip_edge(
@@ -130,17 +152,30 @@ def process_site(server: PyONMS, group: str, data: dict) -> str:
                         )
                         new_bsm.update_edge(ip_edge=edge)
     if old_bsm:
-        server.bsm.update_bsm(bsm=new_bsm, id=old_bsm.id)
+        if old_bsm.request().to_dict() == new_bsm.to_dict():
+            logger.info(
+                f"No changes to site {group} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
+            )
+        else:
+            server.bsm.update_bsm(bsm=new_bsm, id=old_bsm.id)
+            logger.info(
+                f"Updated site {group} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
+            )
     else:
         server.bsm.create_bsm(new_bsm)
+        logger.info(
+            f"Created site {group} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
+        )
     return group
 
 
 def process_instance(server: PyONMS, threads: int = 10) -> None:
+    logger.info("Reloading BSM Daemon")
     server.bsm.reload_bsm_daemon()
-    all_bsms = server.bsm.get_bsms()
+    logger.info("Refreshing BSM Cache")
+    all_bsms = server.bsm.get_bsms(threads=threads)
 
-    bsm_list = get_bsm_list(server=server, all_bsms=all_bsms, threads=threads)
+    bsm_list = generate_bsm_list(server=server, all_bsms=all_bsms, threads=threads)
 
     if threads > len(bsm_list.keys()):
         threads = len(bsm_list.keys())
@@ -167,9 +202,10 @@ def process_instance(server: PyONMS, threads: int = 10) -> None:
                     )
                     result = future.result()
                 results.append(result)
-
+    logger.info("Reloading BSM Daemon")
     server.bsm.reload_bsm_daemon()
-    all_bsms = server.bsm.get_bsms()
+    logger.info("Refreshing BSM Cache")
+    all_bsms = server.bsm.get_bsms(threads=threads)
     cleanup_bsms(server=server, all_bsms=all_bsms)
 
 
@@ -194,4 +230,6 @@ def main():
 
 
 if __name__ == "__main__":
+    logger.info("Starting BSM sync")
     main()
+    logger.info("Completed BSM sync")

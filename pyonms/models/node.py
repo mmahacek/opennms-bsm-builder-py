@@ -43,7 +43,6 @@ class AssetRecord:
     comment: str = None
     password: str = None
     category: str = None
-    displayCategory: str = None
     manufacturer: str = None
     vendor: str = None
     modelNumber: str = None
