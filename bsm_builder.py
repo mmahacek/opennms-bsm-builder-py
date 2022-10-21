@@ -39,6 +39,12 @@ fh.setLevel(logging.DEBUG)
 
 logger.addHandler(fh)
 
+# Include any service other than "ICMP" to include as an edge.
+# The first service that matches will be used as the edge for the node.
+critical_services = ["VC-EDGE", "SP-Edge"]
+
+NODE_CATEGORY = "Flexware"
+
 
 def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
     logger.info("Gathering nodes from inventory")
@@ -55,6 +61,11 @@ def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict
             "MI_(?P<org>.*)-(?P<host>.*)(?P<instance>[0-9][0-9])(?P<function>S|VMR|DNFVI|-vFW)",
             node.label,
         )
+        # match1 for VC-EDGE devices
+        # match1 = re.match(
+        #     "MI_(?P<org>.*)-(?P<instance>.*)",
+        #     node.label,
+        # )
         if match:
             payload = {
                 "node": node,
@@ -69,6 +80,35 @@ def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict
                     "nodes": [payload],
                     "instance": match.group("instance"),
                 }
+        else:
+            if NODE_CATEGORY in node.categories:
+                payload = {
+                    "node": node,
+                    "instance": None,
+                    "function": "EDGE",
+                    "friendly_name": "EDGE",
+                }
+            if bsm_list.get(node.assetRecord.displayCategory):
+                bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
+            else:
+                bsm_list[node.assetRecord.displayCategory] = {
+                    "nodes": [payload],
+                    "instance": None,
+                }
+        # elif match1:
+        #     payload = {
+        #         "node": node,
+        #         "instance": match1.group("instance"),
+        #         "function": "",
+        #         "friendly_name": "EDGE",
+        #     }
+        #     if bsm_list.get(node.assetRecord.displayCategory):
+        #         bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
+        #     else:
+        #         bsm_list[node.assetRecord.displayCategory] = {
+        #             "nodes": [payload],
+        #             "instance": match1.group("instance"),
+        #         }
 
     for group, data in bsm_list.items():
         for bsm in all_bsms:
@@ -82,6 +122,7 @@ def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict
 
 def cleanup_bsms(server: PyONMS, all_bsms: List[BusinessService]) -> None:
     logger.info("Starting cleanup of empty Business Services")
+    empty_bsms = []
     for bsm in tqdm(all_bsms, desc="Checking for empty BSMs", unit="bsm"):
         if (
             not bsm.application_edges
@@ -89,8 +130,10 @@ def cleanup_bsms(server: PyONMS, all_bsms: List[BusinessService]) -> None:
             and not bsm.ip_services_edges
             and not bsm.reduction_key_edges
         ):
-            server.bsm.delete_bsm(bsm.id)
-            logging.info(f"Removed {bsm.name}: No nodes for site in inventory.")
+            empty_bsms.append(bsm)
+    for bsm in tqdm(empty_bsms, desc="Deleting empty BSMs", unit="bsm"):
+        server.bsm.delete_bsm(bsm.id)
+        logging.info(f"Removed {bsm.name}: No nodes for site in inventory.")
     logger.info("Completed cleanup of empty Business Services")
 
 
@@ -124,12 +167,26 @@ def generate_ip_edge(
             ),
         )
 
+    elif node["function"] == "EDGE":
+        return IPServiceEdgeRequest(
+            friendly_name=friendly_name,
+            ip_service_id=service_id,
+            map_function=MapFunction(type="SetTo", status=Severity.WARNING),
+        )
+
     else:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
             map_function=MapFunction(type="SetTo", status=Severity.WARNING),
         )
+
+
+def check_include_service(service: str):
+    for include_service in critical_services:
+        if include_service in service:
+            return True
+    return False
 
 
 def process_site(server: PyONMS, group: str, data: dict) -> str:
@@ -143,7 +200,7 @@ def process_site(server: PyONMS, group: str, data: dict) -> str:
         for ip in node["node"].ipInterfaces:
             if ip.snmpPrimary.value == "P":
                 for service in ip.services:
-                    if "ICMP" in service.serviceType.name:
+                    if check_include_service(service=service.serviceType.name):
                         friendly_name = node["friendly_name"]
                         edge = generate_ip_edge(
                             node=node,
@@ -151,6 +208,7 @@ def process_site(server: PyONMS, group: str, data: dict) -> str:
                             friendly_name=friendly_name,
                         )
                         new_bsm.update_edge(ip_edge=edge)
+                        break
     if old_bsm:
         if old_bsm.request().to_dict() == new_bsm.to_dict():
             logger.info(
@@ -176,7 +234,7 @@ def process_instance(server: PyONMS, threads: int = 10) -> None:
     all_bsms = server.bsm.get_bsms(threads=threads)
 
     bsm_list = generate_bsm_list(server=server, all_bsms=all_bsms, threads=threads)
-
+    critical_services.insert(0, "ICMP")
     if threads > len(bsm_list.keys()):
         threads = len(bsm_list.keys())
     with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
