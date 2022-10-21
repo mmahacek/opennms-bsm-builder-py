@@ -56,7 +56,7 @@ def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict
     logger.info(f"Found {len(nodes)} nodes")
     logger.info("Parsing nodes into site groupings")
     bsm_list = {}
-    for node in nodes:
+    for node in tqdm(nodes, desc="Grouping nodes into sites", unit="node"):
         if not node.assetRecord.displayCategory:
             continue
         match = re.match(
