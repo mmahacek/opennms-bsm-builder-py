@@ -4,7 +4,7 @@
 
 import concurrent.futures
 from enum import Enum
-from typing import List, Union
+from typing import List, Optional
 
 from tqdm import tqdm
 
@@ -25,7 +25,7 @@ class NodeAPI(Endpoint):
         super().__init__(**kwargs)
         self.url = self.base_v2 + "nodes"
 
-    def get_node(self, id: int) -> Union[pyonms.models.node.Node, None]:
+    def get_node(self, id: int) -> Optional[pyonms.models.node.Node]:
         record = self._get(uri=f"{self.url}/{id}")
         if record is not None:
             return self.process_node(record, components=[NodeComponents.ALL])
@@ -34,7 +34,7 @@ class NodeAPI(Endpoint):
 
     def get_nodes(
         self, limit=100, batch_size=100, components: list = [], threads: int = 10
-    ) -> List[Union[pyonms.models.node.Node, None]]:
+    ) -> List[Optional[pyonms.models.node.Node]]:
         devices = []
         params = {}
         records = self.get_batch(
