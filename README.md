@@ -15,7 +15,9 @@ This repo is provided as is.
 
 * ALTERNATIVELY, you can set those three values as environment variables instead of creating a `.env` file.
 
-* See `bsm_builder.py` for an example.
+See `bsm_builder.py` for an example.
+In this file, there verify the values for `CRITICAL_SERVICES` and `MANUFACTURERS` match values on your nodes.
+
 
 ## Logging
 

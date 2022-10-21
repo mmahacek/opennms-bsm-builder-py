@@ -39,11 +39,13 @@ fh.setLevel(logging.DEBUG)
 
 logger.addHandler(fh)
 
-# Include any service other than "ICMP" to include as an edge.
 # The first service that matches will be used as the edge for the node.
-critical_services = ["VC-EDGE", "SP-Edge"]
+# Values here will be a substring match to the node's monitored service name.
+CRITICAL_SERVICES = ["ICMP", "VC-EDGE", "SP-Edge"]
 
-NODE_CATEGORY = "Flexware"
+# Node asset record manufacturer values to include if the node label doesn't match the regex pattern.
+# Values here will be an exact match to the node asset record.
+MANUFACTURERS = ["Velocloud", "SilverPeak"]
 
 
 def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
@@ -58,7 +60,7 @@ def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict
         if not node.assetRecord.displayCategory:
             continue
         match = re.match(
-            "MI_(?P<org>.*)-(?P<host>.*)(?P<instance>[0-9][0-9])(?P<function>S|VMR|DNFVI|-vFW)",
+            "MI_(?P<org>.*)-(?P<host>.*)(?P<instance>[0-9][0-9])(?P<function>S|VMR|DNFVI|DNFV|-vFW)",
             node.label,
         )
         # match1 for VC-EDGE devices
@@ -80,14 +82,13 @@ def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict
                     "nodes": [payload],
                     "instance": match.group("instance"),
                 }
-        else:
-            if NODE_CATEGORY in node.categories:
-                payload = {
-                    "node": node,
-                    "instance": None,
-                    "function": "EDGE",
-                    "friendly_name": "EDGE",
-                }
+        elif node.assetRecord.manufacturer in MANUFACTURERS:
+            payload = {
+                "node": node,
+                "instance": None,
+                "function": "EDGE",
+                "friendly_name": "EDGE",
+            }
             if bsm_list.get(node.assetRecord.displayCategory):
                 bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
             else:
@@ -140,14 +141,14 @@ def cleanup_bsms(server: PyONMS, all_bsms: List[BusinessService]) -> None:
 def generate_ip_edge(
     node: dict, service_id: int, friendly_name: str
 ) -> IPServiceEdgeRequest:
-    if node["function"] == "S":
+    if node["function"] in ["S"]:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
             map_function=MapFunction(type="SetTo", status=Severity.CRITICAL),
         )
 
-    elif node["function"] == "DNFVI":
+    elif node["function"] in ["DNFVI", "DNFV"]:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
@@ -157,7 +158,7 @@ def generate_ip_edge(
             ),
         )
 
-    elif node["function"] == "VMR":
+    elif node["function"] in ["VMR"]:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
@@ -167,7 +168,7 @@ def generate_ip_edge(
             ),
         )
 
-    elif node["function"] == "EDGE":
+    elif node["function"] in ["EDGE"]:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
@@ -183,7 +184,7 @@ def generate_ip_edge(
 
 
 def check_include_service(service: str):
-    for include_service in critical_services:
+    for include_service in CRITICAL_SERVICES:
         if include_service in service:
             return True
     return False
@@ -232,9 +233,7 @@ def process_instance(server: PyONMS, threads: int = 10) -> None:
     server.bsm.reload_bsm_daemon()
     logger.info("Refreshing BSM Cache")
     all_bsms = server.bsm.get_bsms(threads=threads)
-
     bsm_list = generate_bsm_list(server=server, all_bsms=all_bsms, threads=threads)
-    critical_services.insert(0, "ICMP")
     if threads > len(bsm_list.keys()):
         threads = len(bsm_list.keys())
     with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
