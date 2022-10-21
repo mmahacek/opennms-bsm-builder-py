@@ -24,7 +24,7 @@ from pyonms.models.business_service import (
 
 load_dotenv()
 
-LOG_PATH = os.environ.get("log_path", "./bsm.log").replace(
+LOG_PATH = os.environ.get("log_path", "./logs/bsm_topo_DATE.log").replace(
     "DATE", time.strftime("%Y-%m-%d")
 )
 

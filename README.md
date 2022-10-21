@@ -21,6 +21,6 @@ In this file, there verify the values for `CRITICAL_SERVICES` and `MANUFACTURERS
 
 ## Logging
 
-The `bsm_builder.py` script will append logs to a `bsm.log` file.
+The `bsm_builder.py` script will append logs to a `logs/bsm_topo_YYYY-MM-DD.log` file.
 This file can be changed by specifying a full path to a file with the `log_file` environment variable (via `.env`).
 If the filename contains the string `DATE`, it will be replaced with the current date in the format `YYYY-MM-DD`.
