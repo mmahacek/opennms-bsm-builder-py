@@ -17,7 +17,11 @@ class DuplicateEntityError(Exception):
     def __init__(self, name: str, model):
         self.name = name
         self.model = model
-        self.message = f"A {type(self.model)} object named {self.name} already exists."
+        if isinstance(self.model, str):
+            model_type = self.model
+        else:
+            model_type = type(self.model)
+        self.message = f"A {model_type} object named {self.name} already exists."
         super().__init__(self.message)
 
 
@@ -29,4 +33,10 @@ class InvalidValueError(Exception):
         self.message = f"{self.name} received an invalid value of {self.value}."
         if valid:
             self.message += f" Valid options are {self.valid}."
+        super().__init__(self.message)
+
+
+class AuthenticationError(Exception):
+    def __init__(self):
+        self.message = f"Verify login credentials are correct."
         super().__init__(self.message)
