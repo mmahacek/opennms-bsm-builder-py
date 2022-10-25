@@ -11,10 +11,10 @@ class PyONMS:
             "hostname": hostname,
             "username": username,
             "password": password,
-            "name": self.name,
         }
         if name:
             self.name = name
+            args["name"] = name
         else:
             self.name = hostname
             args["name"] = ""
