@@ -45,13 +45,16 @@ CRITICAL_SERVICES = ["ICMP", "VC-EDGE", "SP-Edge"]
 
 # Node asset record manufacturer values to include if the node label doesn't match the regex pattern.
 # Values here will be an exact match to the node asset record.
-MANUFACTURERS = ["Velocloud", "SilverPeak"]
+MANUFACTURERS = ["velocloud", "silverpeak"]
 
 
 def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict:
     logger.info("Gathering nodes from inventory")
     nodes = server.nodes.get_nodes(
-        limit=0, batch_size=100, components=[NodeComponents.IP], threads=threads
+        limit=0,
+        batch_size=100,
+        components=[NodeComponents.IP, NodeComponents.SERVICES],
+        threads=threads,
     )
     logger.info(f"Found {len(nodes)} nodes")
     logger.info("Parsing nodes into site groupings")
@@ -82,7 +85,7 @@ def generate_bsm_list(server: PyONMS, all_bsms: list, threads: int = 25) -> dict
                     "nodes": [payload],
                     "instance": match.group("instance"),
                 }
-        elif node.assetRecord.manufacturer in MANUFACTURERS:
+        elif node.assetRecord.manufacturer.lower() in MANUFACTURERS:
             payload = {
                 "node": node,
                 "instance": None,
@@ -236,7 +239,7 @@ def process_instance(server: PyONMS, threads: int = 10) -> None:
     bsm_list = generate_bsm_list(server=server, all_bsms=all_bsms, threads=threads)
     if threads > len(bsm_list.keys()):
         threads = len(bsm_list.keys())
-    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
         with tqdm(
             total=len(bsm_list.keys()), unit="site", desc="Updating BSM models"
         ) as progress:

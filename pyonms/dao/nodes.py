@@ -49,7 +49,7 @@ class NodeAPI(Endpoint):
             return [None]
         if threads > len(records):
             threads = len(records)
-        with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
             with tqdm(
                 total=len(records), unit="node", desc="Hydrating Node objects"
             ) as progress:
@@ -89,10 +89,13 @@ class NodeAPI(Endpoint):
         )
         if records:
             for ip_interface in records:
-                ip = pyonms.models.node.IPInterface(**ip_interface)
-                if services:
-                    ip.services = self.get_node_ip_services(node_id, ip.ipAddress)
-                ip_addresses.append(ip)
+                if ip_interface:
+                    ip = pyonms.models.node.IPInterface(**ip_interface)
+                    if services:
+                        ip.services = self.get_node_ip_services(node_id, ip.ipAddress)
+                    ip_addresses.append(ip)
+                else:
+                    pass
         return ip_addresses
 
     def get_node_ip_services(
@@ -134,7 +137,7 @@ class NodeAPI(Endpoint):
         for component in components:
             if component in [NodeComponents.SNMP, NodeComponents.ALL]:
                 node.snmpInterfaces = self.get_node_snmpinterfaces(node.id)
-            if component in [
+            elif component in [
                 NodeComponents.IP,
                 NodeComponents.SERVICES,
                 NodeComponents.ALL,
@@ -150,8 +153,8 @@ class NodeAPI(Endpoint):
                     node.ipInterfaces = self.get_node_ip_addresses(
                         node.id, services=False
                     )
-            if component in [NodeComponents.METADATA, NodeComponents.ALL]:
+            elif component in [NodeComponents.METADATA, NodeComponents.ALL]:
                 node.metadata = self.get_node_metadata(node.id)
-            if component in [NodeComponents.HARDWARE, NodeComponents.ALL]:
+            elif component in [NodeComponents.HARDWARE, NodeComponents.ALL]:
                 node.hardwareInventory = self.get_node_hardware(node.id)
         return node
