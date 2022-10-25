@@ -51,7 +51,9 @@ class NodeAPI(Endpoint):
             threads = len(records)
         with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
             with tqdm(
-                total=len(records), unit="node", desc="Hydrating Node objects"
+                total=len(records),
+                unit="node",
+                desc=f"Hydrating {self.name} Node objects",
             ) as progress:
                 futures = []
                 for record in records:
@@ -70,7 +72,9 @@ class NodeAPI(Endpoint):
     ) -> List[Optional[pyonms.models.node.SnmpInterface]]:
         interfaces = []
         records = self.get_batch(
-            url=f"{self.url}/{node_id}/snmpinterfaces", endpoint="snmpInterface"
+            url=f"{self.url}/{node_id}/snmpinterfaces",
+            endpoint="snmpInterface",
+            hide_progress=True,
         )
         if records:
             for snmp_interface in records:
@@ -85,7 +89,9 @@ class NodeAPI(Endpoint):
     ) -> List[Optional[pyonms.models.node.IPInterface]]:
         ip_addresses = []
         records = self.get_batch(
-            url=f"{self.url}/{node_id}/ipinterfaces", endpoint="ipInterface"
+            url=f"{self.url}/{node_id}/ipinterfaces",
+            endpoint="ipInterface",
+            hide_progress=True,
         )
         if records:
             for ip_interface in records:
@@ -105,6 +111,7 @@ class NodeAPI(Endpoint):
         records = self.get_batch(
             url=f"{self.url}/{node_id}/ipinterfaces/{ip_address}/services",
             endpoint="service",
+            hide_progress=True,
         )
         if records:
             for service in records:
@@ -119,7 +126,9 @@ class NodeAPI(Endpoint):
     ) -> List[Optional[pyonms.models.node.Metadata]]:
         metadata = []
         records = self.get_batch(
-            url=f"{self.url}/{node_id}/metadata", endpoint="metaData"
+            url=f"{self.url}/{node_id}/metadata",
+            endpoint="metaData",
+            hide_progress=True,
         )
         for record in records:
             if record:
