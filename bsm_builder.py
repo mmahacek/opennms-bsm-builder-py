@@ -252,6 +252,7 @@ def process_instance(server: PyONMS, threads: int = 10) -> None:
         threads = len(bsm_list.keys())
     if threads == 0:
         threads = 1
+    server.logger = None
     with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
         with tqdm(
             total=len(bsm_list.keys()),
@@ -277,6 +278,7 @@ def process_instance(server: PyONMS, threads: int = 10) -> None:
                     )
                     result = future.result()
                 results.append(result)
+    server.logger = setup_logging(instance_name=server.name)
     server.logger.info("Reloading BSM Daemon")
     server.bsm.reload_bsm_daemon()
     server.logger.info("Refreshing BSM Cache")
