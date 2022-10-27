@@ -143,27 +143,21 @@ class NodeAPI(Endpoint):
 
     def process_node(self, data: dict, components: list) -> pyonms.models.node.Node:
         node = pyonms.models.node.Node(**data)
-        for component in components:
-            if component in [NodeComponents.SNMP, NodeComponents.ALL]:
-                node.snmpInterfaces = self.get_node_snmpinterfaces(node.id)
-            elif component in [
-                NodeComponents.IP,
-                NodeComponents.SERVICES,
-                NodeComponents.ALL,
-            ]:
-                if (
-                    NodeComponents.SERVICES in components
-                    or NodeComponents.ALL in components
-                ):
-                    node.ipInterfaces = self.get_node_ip_addresses(
-                        node.id, services=True
-                    )
-                else:
-                    node.ipInterfaces = self.get_node_ip_addresses(
-                        node.id, services=False
-                    )
-            elif component in [NodeComponents.METADATA, NodeComponents.ALL]:
-                node.metadata = self.get_node_metadata(node.id)
-            elif component in [NodeComponents.HARDWARE, NodeComponents.ALL]:
-                node.hardwareInventory = self.get_node_hardware(node.id)
+        if NodeComponents.ALL in components:
+            node.ipInterfaces = self.get_node_ip_addresses(node.id, services=True)
+            node.snmpInterfaces = self.get_node_snmpinterfaces(node.id)
+            node.metadata = self.get_node_metadata(node.id)
+            node.hardwareInventory = self.get_node_hardware(node.id)
+            return node
+        if NodeComponents.SERVICES in components:
+            node.ipInterfaces = self.get_node_ip_addresses(node.id, services=True)
+        elif NodeComponents.IP in components:
+            node.ipInterfaces = self.get_node_ip_addresses(node.id, services=False)
+        if NodeComponents.SNMP in components:
+            node.snmpInterfaces = self.get_node_snmpinterfaces(node.id)
+        if NodeComponents.METADATA in components:
+            node.metadata = self.get_node_metadata(node.id)
+        if NodeComponents.HARDWARE in components:
+            node.hardwareInventory = self.get_node_hardware(node.id)
+
         return node
