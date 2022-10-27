@@ -136,4 +136,5 @@ test.py
 openapi/
 instances.py
 venv36/
+venv38/
 logs/*.log

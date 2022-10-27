@@ -18,7 +18,7 @@ BATCH_PATH = os.environ.get("log_path", "./logs/bsm_topo_DATE.log").replace(
 )
 
 batch_formatter = logging.Formatter(
-    "%(asctime)s [%(levelname)s] [main] (Thread-%(thread)s-%(funcName)s) %(message)s"
+    "%(asctime)s %(levelname)s [main] (Thread-%(thread)s-%(funcName)s) %(message)s"
 )
 batch_logger = logging.getLogger("bsm_batch")
 batch_logger.setLevel(logging.DEBUG)
@@ -30,10 +30,11 @@ batch_logger.addHandler(bh)
 
 
 def main_thread(threads: int = 10, fresh: bool = False):
-    instance_count = len(instances)
-    if instance_count == 0:
-        instance_count = 1
-    with concurrent.futures.ProcessPoolExecutor(max_workers=instance_count) as pool:
+    if len(instances) < threads:
+        instance_threads = len(instances)
+    else:
+        instance_threads = threads
+    with concurrent.futures.ProcessPoolExecutor(max_workers=instance_threads) as pool:
         with tqdm(
             total=len(instances),
             unit="instances",
