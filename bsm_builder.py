@@ -298,7 +298,7 @@ def instance_builder(server: PyONMS, fresh: bool = False, threads: int = 10):
     logger = setup_logging(instance_name=server.name)
     logger.info("Starting BSM sync")
     if fresh:
-        delete_all_bsms(server=server, threads=threads)
+        delete_all_bsms(server=server, logger=logger, threads=threads)
     process_instance(server, threads=threads, logger=logger)
     logger.info("Completed BSM sync")
 
