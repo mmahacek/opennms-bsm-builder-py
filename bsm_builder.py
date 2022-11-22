@@ -53,7 +53,7 @@ def setup_logging(instance_name: str, process: str = "main") -> logging.Logger:
     return logger
 
 
-def generate_bsm_list(
+def generate_bsm_list(  # noqa C901
     server: PyONMS, all_bsms: list, logger: logging.Logger, threads: int = 25
 ) -> dict:
     logger.info("Gathering nodes from inventory")
