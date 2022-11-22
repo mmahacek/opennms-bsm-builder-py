@@ -67,7 +67,7 @@ def generate_bsm_list(
     logger.info("Parsing nodes into site groupings")
     bsm_list = {}
     regex_search = re.compile(
-        f"MI_(?P<org>.*)-(?P<host>.*)(?P<instance>\d\w+?)-?(?P<function>{'|'.join(FUNCTIONS)})"  # noqa W605
+        f"^MI_(?P<org>.*)-(?P<host>.*)(?P<instance>\d\w+?)-?(?P<function>{'|'.join(FUNCTIONS)})$"  # noqa W605
     )
     for node in tqdm(
         nodes,
