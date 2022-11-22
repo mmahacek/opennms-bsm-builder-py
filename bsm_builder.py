@@ -158,20 +158,14 @@ def generate_ip_edge(
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
-            map_function=MapFunction(
-                type="SetTo",
-                status=Severity.MAJOR,
-            ),
+            map_function=MapFunction(type="SetTo", status=Severity.MAJOR),
         )
 
     elif node["function"] in MINOR_FUNCTIONS:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
-            map_function=MapFunction(
-                type="SetTo",
-                status=Severity.MINOR,
-            ),
+            map_function=MapFunction(type="SetTo", status=Severity.MINOR),
         )
 
     elif node["function"] in WARNING_FUNCTIONS:
