@@ -24,7 +24,7 @@ class BSMAPI(Endpoint):
     ) -> Optional[pyonms.models.business_service.BusinessService]:
         record = self._get(uri=f"{self.url}/{id}")
         if record is not None:
-            bsm = self.process_bsm(record)
+            bsm = self._process_bsm(record)
             self.cache[bsm.id] = bsm
             self.cache_name[bsm.name] = bsm.id
             return bsm
@@ -80,10 +80,12 @@ class BSMAPI(Endpoint):
             for service_url in services.get("business-services", []):
                 service_record = self._get(uri=f"{self.hostname}{service_url}")
                 if service_record["name"] == name:
-                    return self.process_bsm(service_record)
+                    return self._process_bsm(service_record)
         return None
 
-    def process_bsm(self, data: dict) -> pyonms.models.business_service.BusinessService:
+    def _process_bsm(
+        self, data: dict
+    ) -> pyonms.models.business_service.BusinessService:
         data["ip_services_edges"] = data.get("ip-service-edges", [])
         data["reduction_key_edges"] = data.get("reduction-key-edges", [])
         data["child_edges"] = data.get("child-edges", [])
@@ -101,10 +103,12 @@ class BSMAPI(Endpoint):
         business_service = pyonms.models.business_service.BusinessService(**data)
         return business_service
 
-    def reload_bsm_daemon(self):
+    def reload_bsm_daemon(self) -> None:
         self._post(uri=f"{self.url}/daemon/reload", json={})
 
-    def create_bsm(self, bsm: pyonms.models.business_service.BusinessServiceRequest):
+    def create_bsm(
+        self, bsm: pyonms.models.business_service.BusinessServiceRequest
+    ) -> None:
         response = self._post(uri=self.url, json=bsm.to_dict())
         if "constraint [bsm_service_name_key]" in response:
             raise pyonms.models.exceptions.DuplicateEntityError(bsm.name, bsm)
@@ -114,30 +118,5 @@ class BSMAPI(Endpoint):
     ):
         self._put(uri=f"{self.url}/{id}", json=bsm.to_dict())  # noqa: W0612
 
-    def _merge_bsm_request(
-        self,
-        bsm: pyonms.models.business_service.BusinessService,
-        request: pyonms.models.business_service.BusinessServiceRequest,
-    ) -> pyonms.models.business_service.BusinessServiceRequest:
-        new_request = bsm.request()
-        new_request.name = request.name
-        new_request.reduce_function = request.reduce_function
-        new_request.attributes = request.attributes
-        for edge in request.ip_service_edges:
-            if edge in new_request.ip_service_edges:
-                new_request.ip_service_edges.remove(edge)
-            new_request.ip_service_edges.append(edge)
-        for edge in request.child_edges:
-            if edge in new_request.child_edges:
-                new_request.child_edges.remove(edge)
-            new_request.child_edges.append(edge)
-        for edge in request.application_edges:
-            new_request.application_edges.append(edge)
-        for edge in request.reduction_key_edges:
-            new_request.reduction_key_edges.append(edge)
-        for parent in request.parent_services:
-            new_request.parent_services.append(parent)
-        return new_request
-
-    def delete_bsm(self, id: int):
+    def delete_bsm(self, id: int) -> None:
         self._delete(uri=f"{self.url}/{id}")

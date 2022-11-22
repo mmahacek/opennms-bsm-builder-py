@@ -2,18 +2,24 @@
 
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import pyonms.models.exceptions
 
 
 class Severity(Enum):
     INDETERMINATE = "Indeterminate"
+    "Indeterminate"
     NORMAL = "Normal"
+    "Normal"
     WARNING = "Warning"
+    "Warning"
     MINOR = "Minor"
+    "Minor"
     MAJOR = "Major"
+    "Major"
     CRITICAL = "Critical"
+    "Critical"
 
 
 MAP_FUNCTIONS = ["Identity", "Increase", "Decrease", "Ignore", "SetTo"]
@@ -30,7 +36,7 @@ class Attribute:
     key: str
     value: str
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {"key": self.key, "value": self.value}
 
 
@@ -56,7 +62,7 @@ class MapFunction:
         else:
             return f"MapFunction(type={self.type})"
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {"type": self.type, "properties": self.properties}
 
 
@@ -91,7 +97,7 @@ class ReduceFunction:
         else:
             return f"ReduceFunction(type={self.type}, properties={self.properties})"
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {"type": self.type, "properties": self.properties}
 
 
@@ -121,7 +127,7 @@ class IPService:
     def __hash__(self):
         return hash((self.id))
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         payload = {
             "service-name": self.service_name,
             "node-label": self.node_label,
@@ -150,7 +156,7 @@ class ChildEdgeRequest:
     def __hash__(self):
         return hash((self.child_id))
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         payload = {
             "map-function": self.map_function.to_dict(),
             "weight": self.weight,
@@ -175,14 +181,14 @@ class ChildEdge:
     def __hash__(self):
         return hash((self.id))
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         payload = {
             "id": self.id,
             "location": self.location,
             "operational-status": self.operational_status,
             "map-function": self.map_function,
             "weight": self.weight,
-            "ip-service-id": self.ip_service_id,
+            "child-id": self.child_id,
         }
         return payload
 
@@ -215,7 +221,7 @@ class IPServiceEdgeRequest:
     def __hash__(self):
         return hash((self.ip_service_id))
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         payload = {
             "friendly-name": self.friendly_name,
             "map-function": self.map_function.to_dict(),
@@ -235,10 +241,10 @@ class IPServiceEdge:
     weight: int = 1
     map_function: MapFunction = field(default_factory=_map_function)
     reduction_keys: list = field(default_factory=list)
-    ip_service: dict = field(default_factory=dict)
+    ip_service: Union[IPService, dict] = field(default_factory=dict)
 
     def __post_init__(self):
-        if self.ip_service:
+        if isinstance(self.ip_service, dict):
             self.ip_service["service_name"] = self.ip_service.get("service-name")
             del self.ip_service["service-name"]
             self.ip_service["node_label"] = self.ip_service.get("node-label")
@@ -247,7 +253,7 @@ class IPServiceEdge:
             del self.ip_service["ip-address"]
             self.ip_service = IPService(**self.ip_service)
             self.ip_service_id = self.ip_service.id
-        if self.map_function:
+        if isinstance(self.map_function, dict):
             self.map_function = MapFunction(**self.map_function)
 
     def __repr__(self):
@@ -256,7 +262,7 @@ class IPServiceEdge:
     def __hash__(self):
         return hash((self.id))
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         payload = {
             "id": self.id,
             "location": self.location,
@@ -291,7 +297,7 @@ class BusinessServiceRequest:
     def __repr__(self):
         return f"BusinessServiceRequest(name={self.name})"
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         payload = {
             "name": self.name,
             "attributes": {"attribute": []},
@@ -314,7 +320,7 @@ class BusinessServiceRequest:
             payload["parent-services"] = self.parent_services
         return payload
 
-    def add_attribute(self, attribute: Attribute):
+    def add_attribute(self, attribute: Attribute) -> None:
         if attribute.key in [param.key for param in self.attributes]:
             self.attributes.remove(
                 [param for param in self.attributes if param.key == attribute.key][0]
@@ -405,7 +411,7 @@ class BusinessService:
     def __repr__(self):
         return f"BusinessService(id={self.id}, name={self.name})"
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         payload = {
             "name": self.name,
             "id": self.id,
@@ -423,7 +429,7 @@ class BusinessService:
                 edge.to_dict() for edge in self.ip_services_edges
             ]
         if self.child_edges:
-            payload["child-edges"] = self.child_edges
+            payload["child-edges"] = [edge.to_dict() for edge in self.child_edges]
         if self.application_edges:
             payload["application-edges"] = self.application_edges
         if self.parent_services:

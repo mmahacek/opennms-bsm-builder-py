@@ -10,28 +10,62 @@ from pyonms.utils import convert_time
 
 class LabelSource(Enum):
     USER = "U"
+    "User specified"
     NETBIOS = "N"
+    "Netbios"
     HOSTNAME = "H"
+    "Hostname"
     SYSNAME = "S"
+    "System name"
     ADDRESS = "A"
+    "Address"
     UNKNOWN = " "
+    "Unknown"
 
 
 class NodeType(Enum):
     ACTIVE = "A"
+    "Active"
     DELETED = "D"
+    "Deleted"
     UNKNOWN = " "
+    "Unknown"
 
 
 class Managed(Enum):
     MANAGED = "M"
+    "Managed"
     UNMANAGED = "U"
+    "Unmanaged"
+    DELETED = "D"
+    "Deleted"
+    ALIAS = "A"
+    "Alias"
+    FORCE_UNMANAGED = "F"
+    "Force Unmanaged"
+    NOT_POLLED = "N"
+    "Not Polled"
+    REMOTELY_MONITORED = "X"
+    "Remotely Monitored"
 
 
 class PrimaryType(Enum):
     PRIMARY = "P"
+    "SNMP Primary"
     SECONDARY = "S"
+    "SNMP Secondary"
     NOT_ELIGIBLE = "N"
+    "No SNMP"
+
+
+@dataclass
+class Metadata:
+    context: str
+    key: str
+    value: str
+
+    def __hash__(self):
+        return hash((self.context, self.key, self.value))
 
 
 @dataclass(repr=False)
@@ -126,16 +160,18 @@ class ServiceType:
 @dataclass(repr=False)
 class Service:
     id: int
-    notify: str
-    status: str
-    qualifier: str
-    down: bool
-    source: str
-    serviceType: ServiceType
-    ipInterfaceId: int
-    statusLong: str
-    lastFail: datetime
-    lastGood: datetime
+    notify: str = None
+    status: str = None
+    qualifier: str = None
+    down: bool = None
+    source: str = None
+    serviceType: ServiceType = None
+    ipInterfaceId: int = None
+    statusLong: str = None
+    lastFail: datetime = None
+    lastGood: datetime = None
+    metadata: List[Optional[Metadata]] = field(default_factory=list)
+    applications: List[Optional[str]] = field(default_factory=list)
 
     def __post_init__(self):
         if isinstance(self.serviceType, dict):
@@ -155,28 +191,27 @@ class Service:
 @dataclass(repr=False)
 class SnmpInterface:
     id: int
-    hasFlows: bool
-    hasIngressFlows: bool
-    hasEgressFlows: bool
-    lastIngressFlow: datetime
-    lastEgressFlow: datetime
-    ifType: int
-    lastCapsdPoll: datetime
-    ifAlias: str
-    ifIndex: int
-    ifDescr: str
-    ifName: str
-    physAddr: str
-    ifSpeed: int
-    ifAdminStatus: int
-    ifOperStatus: int
-    lastSnmpPoll: datetime
-    collectionUserSpecified: bool
-    collectFlag: str
-    pollFlag: str
-    collect: bool
-    poll: bool
-    collectionPolicySpecified: Optional[bool] = None
+    hasFlows: bool = None
+    hasIngressFlows: bool = None
+    hasEgressFlows: bool = None
+    lastIngressFlow: datetime = None
+    lastEgressFlow: datetime = None
+    ifType: int = None
+    lastCapsdPoll: datetime = None
+    ifAlias: str = None
+    ifIndex: int = None
+    ifDescr: str = None
+    ifName: str = None
+    physAddr: str = None
+    ifSpeed: int = None
+    ifAdminStatus: int = None
+    ifOperStatus: int = None
+    lastSnmpPoll: datetime = None
+    collectionUserSpecified: bool = None
+    collectFlag: str = None
+    pollFlag: str = None
+    collect: bool = None
+    poll: bool = None
     nodeId: Optional[int] = None
 
     def __post_init__(self):
@@ -199,19 +234,20 @@ class SnmpInterface:
 @dataclass(repr=False)
 class IPInterface:
     id: Union[int, str]
-    isDown: bool
-    nodeId: int
-    ifIndex: int
-    lastEgressFlow: Union[datetime, int]
-    lastIngressFlow: Union[datetime, int]
-    ipAddress: str
-    snmpPrimary: Union[PrimaryType, str]
-    isManaged: Union[Managed, str]
     hostName: Optional[str] = None
+    isDown: bool = None
+    nodeId: int = None
+    ifIndex: int = None
+    lastEgressFlow: Union[datetime, int] = None
+    lastIngressFlow: Union[datetime, int] = None
+    ipAddress: str = None
+    snmpPrimary: Union[PrimaryType, str] = None
+    isManaged: Union[Managed, str] = None
     monitoredServiceCount: Optional[int] = None
     lastCapsdPoll: Optional[Union[datetime, int]] = None
     snmpInterface: Optional[Union[SnmpInterface, dict]] = field(default_factory=dict)
     services: List[Optional[Service]] = field(default_factory=list)
+    metadata: List[Optional[Metadata]] = field(default_factory=list)
 
     def __post_init__(self):
         if isinstance(self.id, str):
@@ -234,16 +270,6 @@ class IPInterface:
 
     def __hash__(self):
         return hash((self.id))
-
-
-@dataclass
-class Metadata:
-    context: str
-    key: str
-    value: str
-
-    def __hash__(self):
-        return hash((self.context, self.key, self.value))
 
 
 @dataclass
