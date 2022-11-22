@@ -29,6 +29,13 @@ CRITICAL_SERVICES = ["ICMP", "VC-EDGE", "SP-Edge"]
 # Values here will be an exact match to the node asset record.
 MANUFACTURERS = ["velocloud", "silverpeak"]
 
+CRITICAL_FUNCTIONS = ["SAOS", "S"]
+MAJOR_FUNCTIONS = ["DNFVI", "DNFV"]
+MINOR_FUNCTIONS = ["VMR", "VCE"]
+WARNING_FUNCTIONS = ["EDGE", "RTR01", "SP-1", "SP-2"]
+
+FUNCTIONS = WARNING_FUNCTIONS + MINOR_FUNCTIONS + MAJOR_FUNCTIONS + CRITICAL_FUNCTIONS
+
 
 def setup_logging(instance_name: str, process: str = "main") -> logging.Logger:
     logger = logging.getLogger(f"{instance_name}-{process}")
@@ -67,7 +74,7 @@ def generate_bsm_list(
         if not node.assetRecord.displayCategory:
             continue
         match = re.match(
-            "MI_(?P<org>.*)-(?P<host>.*)(?P<instance>[0-9][0-9])(?P<function>S|VMR|DNFVI|DNFV|-vFW)",
+            f"MI_(?P<org>.*)-(?P<host>.*)(?P<instance>\d\w+?)-?(?P<function>{'|'.join(FUNCTIONS)})",
             node.label,
         )
         # match1 for VC-EDGE devices
@@ -89,20 +96,21 @@ def generate_bsm_list(
                     "nodes": [payload],
                     "instance": match.group("instance"),
                 }
-        elif node.assetRecord.manufacturer.lower() in MANUFACTURERS:
-            payload = {
-                "node": node,
-                "instance": None,
-                "function": "EDGE",
-                "friendly_name": "EDGE",
-            }
-            if bsm_list.get(node.assetRecord.displayCategory):
-                bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
-            else:
-                bsm_list[node.assetRecord.displayCategory] = {
-                    "nodes": [payload],
+        elif node.assetRecord.manufacturer:
+            if node.assetRecord.manufacturer.lower() in MANUFACTURERS:
+                payload = {
+                    "node": node,
                     "instance": None,
+                    "function": "EDGE",
+                    "friendly_name": "EDGE",
                 }
+                if bsm_list.get(node.assetRecord.displayCategory):
+                    bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
+                else:
+                    bsm_list[node.assetRecord.displayCategory] = {
+                        "nodes": [payload],
+                        "instance": None,
+                    }
         # elif match1:
         #     payload = {
         #         "node": node,
@@ -158,14 +166,14 @@ def cleanup_bsms(
 def generate_ip_edge(
     node: dict, service_id: int, friendly_name: str, logger: logging.Logger
 ) -> IPServiceEdgeRequest:
-    if node["function"] in ["S"]:
+    if node["function"] in CRITICAL_FUNCTIONS:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
             map_function=MapFunction(type="SetTo", status=Severity.CRITICAL),
         )
 
-    elif node["function"] in ["DNFVI", "DNFV"]:
+    elif node["function"] in MAJOR_FUNCTIONS:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
@@ -175,7 +183,7 @@ def generate_ip_edge(
             ),
         )
 
-    elif node["function"] in ["VMR"]:
+    elif node["function"] in MINOR_FUNCTIONS:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
@@ -185,7 +193,7 @@ def generate_ip_edge(
             ),
         )
 
-    elif node["function"] in ["EDGE"]:
+    elif node["function"] in WARNING_FUNCTIONS:
         return IPServiceEdgeRequest(
             friendly_name=friendly_name,
             ip_service_id=service_id,
