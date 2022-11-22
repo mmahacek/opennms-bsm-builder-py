@@ -66,6 +66,9 @@ def generate_bsm_list(
     logger.info(f"Found {len(nodes)} nodes")
     logger.info("Parsing nodes into site groupings")
     bsm_list = {}
+    regex_search = re.compile(
+        f"MI_(?P<org>.*)-(?P<host>.*)(?P<instance>\d\w+?)-?(?P<function>{'|'.join(FUNCTIONS)})"  # noqa W605
+    )
     for node in tqdm(
         nodes,
         desc=f"Grouping {server.name} nodes into sites",
@@ -73,15 +76,7 @@ def generate_bsm_list(
     ):
         if not node.assetRecord.displayCategory:
             continue
-        match = re.match(
-            f"MI_(?P<org>.*)-(?P<host>.*)(?P<instance>\d\w+?)-?(?P<function>{'|'.join(FUNCTIONS)})",
-            node.label,
-        )
-        # match1 for VC-EDGE devices
-        # match1 = re.match(
-        #     "MI_(?P<org>.*)-(?P<instance>.*)",
-        #     node.label,
-        # )
+        match = regex_search.match(node.label)
         if match:
             payload = {
                 "node": node,
@@ -111,20 +106,6 @@ def generate_bsm_list(
                         "nodes": [payload],
                         "instance": None,
                     }
-        # elif match1:
-        #     payload = {
-        #         "node": node,
-        #         "instance": match1.group("instance"),
-        #         "function": "",
-        #         "friendly_name": "EDGE",
-        #     }
-        #     if bsm_list.get(node.assetRecord.displayCategory):
-        #         bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
-        #     else:
-        #         bsm_list[node.assetRecord.displayCategory] = {
-        #             "nodes": [payload],
-        #             "instance": match1.group("instance"),
-        #         }
 
     for group, data in bsm_list.items():
         for bsm in all_bsms:
