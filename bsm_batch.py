@@ -7,14 +7,14 @@ import time
 
 from tqdm import tqdm
 
+import bsm_builder
+from instances import instances
 from pyonms import PyONMS
 
-import bsm_builder
-
-from instances import instances
-
-BATCH_PATH = os.environ.get("log_path", "./logs/bsm_topo_DATE.log").replace(
-    "DATE", time.strftime("%Y-%m-%d")
+BATCH_PATH = (
+    os.environ.get("log_path", "./logs/bsm_INSTANCE_DATE.log")
+    .replace("DATE", time.strftime("%Y-%m-%d"))
+    .replace("INSTANCE", "topo")
 )
 
 batch_formatter = logging.Formatter(

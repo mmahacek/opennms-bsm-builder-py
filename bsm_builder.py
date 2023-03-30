@@ -40,9 +40,11 @@ FUNCTIONS = WARNING_FUNCTIONS + MINOR_FUNCTIONS + MAJOR_FUNCTIONS + CRITICAL_FUN
 def setup_logging(instance_name: str, process: str = "main") -> logging.Logger:
     logger = logging.getLogger(f"{instance_name}-{process}")
     logger.setLevel(logging.DEBUG)
-    LOG_PATH = os.environ.get(
-        "log_path", f"./logs/bsm_{instance_name}_DATE.log"
-    ).replace("DATE", time.strftime("%Y-%m-%d"))
+    LOG_PATH = (
+        os.environ.get("log_path", "./logs/bsm_INSTANCE_DATE.log")
+        .replace("DATE", time.strftime("%Y-%m-%d"))
+        .replace("INSTANCE", instance_name)
+    )
     log_formatter = logging.Formatter(
         f"%(asctime)s %(levelname)s [{instance_name}] (Thread-%(thread)s-%(funcName)s) %(message)s"
     )
@@ -139,7 +141,7 @@ def cleanup_bsms(
         desc=f"Deleting {server.name} empty BSMs",
         unit="bsm",
     ):
-        server.bsm.delete_bsm(bsm.id)
+        server.bsm.delete_bsm(bsm=bsm)
         logger.info(f"Removed {bsm.name}: No nodes for site in inventory.")
     logger.info("Completed cleanup of empty Business Services")
 
@@ -294,7 +296,7 @@ def delete_all_bsms(server: PyONMS, logger: logging.Logger, threads: int = 10):
         desc=f"Deleting all {server.name} BSMs",
         unit="bsm",
     ):
-        server.bsm.delete_bsm(bsm.id)
+        server.bsm.delete_bsm(bsm=bsm)
     server.bsm.reload_bsm_daemon()
     logger.info("Completed cleanup of all Business Services")
 
