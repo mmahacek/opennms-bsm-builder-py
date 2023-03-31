@@ -1,4 +1,5 @@
-requests
+#requests
 python-dotenv
 tqdm
-xmltodict
+#xmltodict
+git+https://github.com/mmahacek/PyONMS.git@v0.0.6#egg=PyONMS

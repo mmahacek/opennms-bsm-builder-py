@@ -137,4 +137,7 @@ openapi/
 instances.py
 venv36/
 venv38/
+venv39/
+venv310/
+venv3/
 logs/*.log
