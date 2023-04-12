@@ -120,7 +120,7 @@ def generate_bsm_list(  # noqa C901
         elif ((node.assetRecord.manufacturer or "").lower() in MANUFACTURERS) and (
             (node.assetRecord.modelNumber or "").lower() in MODEL_NUMBER
         ):
-            instance = "00"
+            instance = "01"
             payload = {
                 "node": node,
                 "instance": instance,
