@@ -120,9 +120,10 @@ def generate_bsm_list(  # noqa C901
         elif ((node.assetRecord.manufacturer or "").lower() in MANUFACTURERS) and (
             (node.assetRecord.modelNumber or "").lower() in MODEL_NUMBER
         ):
+            instance = "00"
             payload = {
                 "node": node,
-                "instance": None,
+                "instance": instance,
                 "function": "EDGE",
                 "friendly_name": "EDGE",
             }
@@ -141,7 +142,7 @@ def generate_bsm_list(  # noqa C901
                 bsm_list[node.assetRecord.displayCategory] = {
                     instance: {
                         "nodes": [payload],
-                        "instance": None,
+                        "instance": instance,
                         "service_name": f"{node.assetRecord.displayCategory}_{instance}",
                     }
                 }
