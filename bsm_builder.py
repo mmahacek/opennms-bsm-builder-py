@@ -5,21 +5,22 @@ import logging
 import os
 import re
 import time
-
 from typing import List
-
-from tqdm import tqdm
 
 from pyonms import PyONMS
 from pyonms.dao.nodes import NodeComponents
 from pyonms.models.business_service import (
+    Attribute,
     BusinessService,
     BusinessServiceRequest,
+    ChildEdgeRequest,
     IPServiceEdgeRequest,
     MapFunction,
-    Attribute,
     Severity,
 )
+from tqdm import tqdm
+
+# import models
 
 # The first service that matches will be used as the edge for the node.
 # Values here will be a substring match to the node's monitored service name.
@@ -29,17 +30,27 @@ CRITICAL_SERVICES = ["ICMP", "VC-EDGE", "SP-Edge"]
 # Values here will be an exact match to the node asset record.
 MANUFACTURERS = ["velocloud", "silverpeak"]
 
-CRITICAL_FUNCTIONS = ["SAOS", "S"]
-MAJOR_FUNCTIONS = ["DNFVI", "DNFV"]
-MINOR_FUNCTIONS = ["VMR", "VCE"]
-WARNING_FUNCTIONS = ["EDGE", "RTR01", "SP-1", "SP-2"]
+CRITICAL_FUNCTIONS = ["SAOS", "S", "SAOS1"]
+MAJOR_FUNCTIONS = ["DNFVI", "DNFV", "DNFVI1"]
+MINOR_FUNCTIONS = ["VMR", "VMR1", "RTR01"]
+# WARNING_FUNCTIONS = ["EDGE", "SP-1", "SP-2"]
 
-FUNCTIONS = WARNING_FUNCTIONS + MINOR_FUNCTIONS + MAJOR_FUNCTIONS + CRITICAL_FUNCTIONS
+FUNCTIONS = MINOR_FUNCTIONS + MAJOR_FUNCTIONS + CRITICAL_FUNCTIONS
+
+MODEL_NUMBER = ["edge kvm", "virtual"]
+SECONDARY_DEVICES = ["02", "03", "04", "05", "06", "07", "08", "09"]
 
 
 def setup_logging(instance_name: str, process: str = "main") -> logging.Logger:
     logger = logging.getLogger(f"{instance_name}-{process}")
     logger.setLevel(logging.DEBUG)
+
+    # bsm_log_path = os.environ['bsm_log_path']
+
+    # LOG_PATH = os.environ.get(
+    #    "log_path", bsm_log_path + f"/logs/bsm_{instance_name}_DATE.log"
+    # ).replace("DATE", time.strftime("%Y-%m-%d"))
+
     LOG_PATH = (
         os.environ.get("log_path", "./logs/bsm_INSTANCE_DATE.log")
         .replace("DATE", time.strftime("%Y-%m-%d"))
@@ -80,40 +91,69 @@ def generate_bsm_list(  # noqa C901
             continue
         match = regex_search.match(node.label)
         if match:
+            instance = match.group("instance")
             payload = {
                 "node": node,
-                "instance": match.group("instance"),
+                "instance": instance,
                 "function": match.group("function"),
-                "friendly_name": f'{match.group("instance")}{match.group("function")}',
+                "friendly_name": f'{instance}{match.group("function")}',
             }
             if bsm_list.get(node.assetRecord.displayCategory):
-                bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
+                if bsm_list[node.assetRecord.displayCategory].get(instance):
+                    bsm_list[node.assetRecord.displayCategory][instance][
+                        "nodes"
+                    ].append(payload)
+                else:
+                    bsm_list[node.assetRecord.displayCategory][instance] = {
+                        "nodes": [payload],
+                        "instance": instance,
+                        "service_name": f"{node.assetRecord.displayCategory}_{instance}",
+                    }
             else:
                 bsm_list[node.assetRecord.displayCategory] = {
-                    "nodes": [payload],
-                    "instance": match.group("instance"),
+                    instance: {
+                        "nodes": [payload],
+                        "instance": instance,
+                        "service_name": f"{node.assetRecord.displayCategory}_{instance}",
+                    }
                 }
-        elif node.assetRecord.manufacturer:
-            if node.assetRecord.manufacturer.lower() in MANUFACTURERS:
-                payload = {
-                    "node": node,
-                    "instance": None,
-                    "function": "EDGE",
-                    "friendly_name": "EDGE",
-                }
-                if bsm_list.get(node.assetRecord.displayCategory):
-                    bsm_list[node.assetRecord.displayCategory]["nodes"].append(payload)
+        elif ((node.assetRecord.manufacturer or "").lower() in MANUFACTURERS) and (
+            (node.assetRecord.modelNumber or "").lower() in MODEL_NUMBER
+        ):
+            payload = {
+                "node": node,
+                "instance": None,
+                "function": "EDGE",
+                "friendly_name": "EDGE",
+            }
+            if bsm_list.get(node.assetRecord.displayCategory):
+                if bsm_list[node.assetRecord.displayCategory].get(instance):
+                    bsm_list[node.assetRecord.displayCategory][instance][
+                        "nodes"
+                    ].append(payload)
                 else:
-                    bsm_list[node.assetRecord.displayCategory] = {
+                    bsm_list[node.assetRecord.displayCategory][instance] = {
+                        "nodes": [payload],
+                        "instance": instance,
+                        "service_name": f"{node.assetRecord.displayCategory}_{instance}",
+                    }
+            else:
+                bsm_list[node.assetRecord.displayCategory] = {
+                    instance: {
                         "nodes": [payload],
                         "instance": None,
+                        "service_name": f"{node.assetRecord.displayCategory}_{instance}",
                     }
+                }
 
-    for group, data in bsm_list.items():
-        for bsm in all_bsms:
-            if group == bsm.name:
-                data["bsm"] = bsm
-                break
+    for name, instance_data in bsm_list.items():
+        instance_data["bsm"] = server.bsm.find_bsm_name(name=name, cache_only=True)
+        for instance_id, site_data in instance_data.items():
+            if instance_id in ["bsm"]:
+                continue
+            site_data["bsm"] = server.bsm.find_bsm_name(
+                name=site_data["service_name"], cache_only=True
+            )
     logger.info(f"Found {len(bsm_list)} sites")
     logger.info("Completed group generation")
     return bsm_list
@@ -170,12 +210,12 @@ def generate_ip_edge(
             map_function=MapFunction(type="SetTo", status=Severity.MINOR),
         )
 
-    elif node["function"] in WARNING_FUNCTIONS:
-        return IPServiceEdgeRequest(
-            friendly_name=friendly_name,
-            ip_service_id=service_id,
-            map_function=MapFunction(type="SetTo", status=Severity.WARNING),
-        )
+    # elif node["function"] in WARNING_FUNCTIONS:
+    #    return IPServiceEdgeRequest(
+    #        friendly_name=friendly_name,
+    #        ip_service_id=service_id,
+    #        map_function=MapFunction(type="SetTo", status=Severity.WARNING),
+    #    )
 
     else:
         return IPServiceEdgeRequest(
@@ -192,44 +232,86 @@ def check_include_service(service: str):
     return False
 
 
-def process_site(server: PyONMS, group: str, data: dict) -> str:
-    logger = setup_logging(instance_name=server.name, process=group)
-    old_bsm = server.bsm.find_bsm_name(name=group, cache_only=True)
-    if old_bsm:
-        new_bsm = old_bsm.request()
+def process_site(server: PyONMS, group_name: str, site: dict) -> str:  # noqa C901
+    logger = setup_logging(instance_name=server.name, process=group_name)
+    for instance, data in site.items():
+        if instance in ["bsm"]:
+            continue
+        if data.get("bsm"):
+            old_bsm = data["bsm"]
+            new_bsm = data["bsm"].request()
+        else:
+            old_bsm = server.bsm.find_bsm_name(
+                name=data["service_name"], cache_only=True
+            )
+            if old_bsm:
+                new_bsm = old_bsm.request()
+            else:
+                new_bsm = BusinessServiceRequest(name=data["service_name"])
+        new_bsm.add_attribute(Attribute(key="model", value="device"))
+        for node in data["nodes"]:
+            for ip in node["node"].ipInterfaces:
+                if ip.snmpPrimary.value == "P":
+                    for service in ip.services:
+                        if check_include_service(service=service.serviceType.name):
+                            friendly_name = node["friendly_name"]
+                            edge = generate_ip_edge(
+                                node=node,
+                                service_id=service.id,
+                                friendly_name=friendly_name,
+                                logger=logger,
+                            )
+                            new_bsm.update_edge(ip_edge=edge)
+                            break
+        if len(new_bsm.ip_service_edges) <= 1:
+            pass  # 856 singles # continue
+        if old_bsm:
+            if old_bsm.request().to_dict() == new_bsm.to_dict():
+                logger.info(
+                    f"No changes to site {data['service_name']} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
+                )
+            else:
+                server.bsm.update_bsm(bsm=new_bsm, id=old_bsm.id)
+                logger.info(
+                    f"Updated site {data['service_name']} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
+                )
+        else:
+            server.bsm.create_bsm(new_bsm)
+            logger.info(
+                f"Created site {data['service_name']} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
+            )
+    return group_name
+
+
+def group_site_services(server: PyONMS, group_name: str, site: dict):  # noqa C901
+    if len([id for id in site.keys() if id != "bsm"]) < 2:
+        return group_name
+    logger = setup_logging(instance_name=server.name, process=group_name)
+    if isinstance(site.get("bsm"), BusinessService):
+        old_bsm = site["bsm"]
+        new_bsm = site["bsm"].request()
     else:
-        new_bsm = BusinessServiceRequest(name=group)
-    new_bsm.add_attribute(Attribute(key="model", value="device"))
-    for node in data["nodes"]:
-        for ip in node["node"].ipInterfaces:
-            if ip.snmpPrimary.value == "P":
-                for service in ip.services:
-                    if check_include_service(service=service.serviceType.name):
-                        friendly_name = node["friendly_name"]
-                        edge = generate_ip_edge(
-                            node=node,
-                            service_id=service.id,
-                            friendly_name=friendly_name,
-                            logger=logger,
-                        )
-                        new_bsm.update_edge(ip_edge=edge)
-                        break
+        old_bsm = None
+        new_bsm = BusinessServiceRequest(name=group_name)
+    new_bsm.add_attribute(Attribute(key="model", value="site"))
+    for instance, data in site.items():
+        if instance in ["bsm"]:
+            continue
+        if data.get("bsm"):
+            new_bsm.update_edge(child_edge=ChildEdgeRequest(child_id=data["bsm"].id))
+
+    if len(new_bsm.child_edges) <= 1:
+        return group_name
     if old_bsm:
         if old_bsm.request().to_dict() == new_bsm.to_dict():
-            logger.info(
-                f"No changes to site {group} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
-            )
+            logger.info(f"No changes to site {group_name}")
         else:
             server.bsm.update_bsm(bsm=new_bsm, id=old_bsm.id)
-            logger.info(
-                f"Updated site {group} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
-            )
+            logger.info(f"Updated site {group_name}")
     else:
         server.bsm.create_bsm(new_bsm)
-        logger.info(
-            f"Created site {group} with nodes: {', '.join([node['node'].label for node in data['nodes']])}"
-        )
-    return group
+        logger.info(f"Created site {group_name}")
+    return group_name
 
 
 def process_instance(server: PyONMS, logger: logging.Logger, threads: int = 10) -> None:
@@ -244,16 +326,17 @@ def process_instance(server: PyONMS, logger: logging.Logger, threads: int = 10) 
         threads = len(bsm_list.keys())
     if threads == 0:
         threads = 1
-    with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
         with tqdm(
             total=len(bsm_list.keys()),
             unit="site",
-            desc=f"Updating {server.name} BSM models",
+            desc=f"Updating {server.name} BSM instance models",
         ) as progress:
             futures = []
             for group, data in bsm_list.items():
+                # process_site(server=server, group_name=group, site=data)
                 future = pool.submit(
-                    process_site, server=server, group=group, data=data
+                    process_site, server=server, group_name=group, site=data
                 )
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
@@ -267,7 +350,43 @@ def process_instance(server: PyONMS, logger: logging.Logger, threads: int = 10) 
                     future = pool.submit(
                         process_site,
                         server=server,
-                        group=group,
+                        group_name=group,
+                        data=data,
+                    )
+                    result = future.result()
+                results.append(result)
+    logger.info("Reloading BSM Daemon")
+    server.bsm.reload_bsm_daemon()
+    all_bsms = server.bsm.get_bsms(threads=threads)
+    bsm_list = generate_bsm_list(
+        server=server, all_bsms=all_bsms, threads=threads, logger=logger
+    )
+    logger.info("Refreshing BSM Cache")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as pool:
+        with tqdm(
+            total=len(bsm_list.keys()),
+            unit="site",
+            desc=f"Updating {server.name} BSM site models",
+        ) as progress:
+            futures = []
+            for group, data in bsm_list.items():
+                # process_site(server=server, group_name=group, site=data)
+                future = pool.submit(
+                    group_site_services, server=server, group_name=group, site=data
+                )
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+            results = []
+            for future in futures:
+                try:
+                    result = future.result()
+                except Exception as e:
+                    print(f"{e}")
+                    time.sleep(5)
+                    future = pool.submit(
+                        group_site_services,
+                        server=server,
+                        group_name=group,
                         data=data,
                     )
                     result = future.result()
