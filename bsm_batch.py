@@ -5,16 +5,16 @@ import logging
 import os
 import time
 
+from pyonms import PyONMS
 from tqdm import tqdm
 
-from pyonms import PyONMS
-
 import bsm_builder
-
 from instances import instances
 
-BATCH_PATH = os.environ.get("log_path", "./logs/bsm_topo_DATE.log").replace(
-    "DATE", time.strftime("%Y-%m-%d")
+BATCH_PATH = (
+    os.environ.get("log_path", "./logs/bsm_INSTANCE_DATE.log")
+    .replace("DATE", time.strftime("%Y-%m-%d"))
+    .replace("INSTANCE", "topo")
 )
 
 batch_formatter = logging.Formatter(
@@ -42,13 +42,10 @@ def main_thread(threads: int = 10, fresh: bool = False):
         ) as progress:
             futures = []
             for instance_name, instance in instances.items():
-                hostname = instance["hostname"]
-                username = instance["username"]
-                password = instance["password"]
                 server = PyONMS(
-                    hostname=hostname,
-                    username=username,
-                    password=password,
+                    hostname=instance["hostname"],
+                    username=instance["username"],
+                    password=instance["password"],
                     name=instance_name,
                 )
                 future = pool.submit(
@@ -71,13 +68,12 @@ def process_instance(server: PyONMS, fresh: bool = False, threads: int = 10):
 
 def main(threads: int = 10, fresh: bool = False):
     for instance_name, instance in instances.items():
-        hostname = instance["hostname"]
-        username = instance["username"]
-        password = instance["password"]
         server = PyONMS(
-            hostname=hostname, username=username, password=password, name=instance_name
+            hostname=instance["hostname"],
+            username=instance["username"],
+            password=instance["password"],
+            name=instance_name,
         )
-
         bsm_builder.instance_builder(
             server=server,
             fresh=fresh,
