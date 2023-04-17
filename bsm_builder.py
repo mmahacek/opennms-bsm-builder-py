@@ -38,7 +38,7 @@ MINOR_FUNCTIONS = ["VMR", "VMR1", "RTR01"]
 FUNCTIONS = MINOR_FUNCTIONS + MAJOR_FUNCTIONS + CRITICAL_FUNCTIONS
 
 MODEL_NUMBER = ["edge kvm", "virtual"]
-SECONDARY_DEVICES = ["02", "03", "04", "05", "06", "07", "08", "09"]
+# SECONDARY_DEVICES = ["02", "03", "04", "05", "06", "07", "08", "09"]
 
 
 def setup_logging(instance_name: str, process: str = "main") -> logging.Logger:
@@ -107,20 +107,20 @@ def generate_bsm_list(  # noqa C901
                     bsm_list[node.assetRecord.displayCategory][instance] = {
                         "nodes": [payload],
                         "instance": instance,
-                        "service_name": f"{node.assetRecord.displayCategory}_{instance}",
+                        "service_name": f"{node.assetRecord.displayCategory}",
                     }
             else:
                 bsm_list[node.assetRecord.displayCategory] = {
                     instance: {
                         "nodes": [payload],
                         "instance": instance,
-                        "service_name": f"{node.assetRecord.displayCategory}_{instance}",
+                        "service_name": f"{node.assetRecord.displayCategory}",
                     }
                 }
         elif ((node.assetRecord.manufacturer or "").lower() in MANUFACTURERS) and (
             (node.assetRecord.modelNumber or "").lower() in MODEL_NUMBER
         ):
-            instance = "01"
+            instance = "edge"
             payload = {
                 "node": node,
                 "instance": instance,
@@ -136,18 +136,22 @@ def generate_bsm_list(  # noqa C901
                     bsm_list[node.assetRecord.displayCategory][instance] = {
                         "nodes": [payload],
                         "instance": instance,
-                        "service_name": f"{node.assetRecord.displayCategory}_{instance}",
+                        "service_name": f"{node.assetRecord.displayCategory}",
                     }
             else:
                 bsm_list[node.assetRecord.displayCategory] = {
                     instance: {
                         "nodes": [payload],
                         "instance": instance,
-                        "service_name": f"{node.assetRecord.displayCategory}_{instance}",
+                        "service_name": f"{node.assetRecord.displayCategory}",
                     }
                 }
 
     for name, instance_data in bsm_list.items():
+        instances = [id for id in instance_data.keys() if id not in ["bsm", "edge"]]
+        if len(instances) >= 2:
+            for instance in instances:
+                instance_data[instance]["service_name"] += f"_{instance}"
         instance_data["bsm"] = server.bsm.find_bsm_name(name=name, cache_only=True)
         for instance_id, site_data in instance_data.items():
             if instance_id in ["bsm"]:
@@ -236,7 +240,7 @@ def check_include_service(service: str):
 def process_site(server: PyONMS, group_name: str, site: dict) -> str:  # noqa C901
     logger = setup_logging(instance_name=server.name, process=group_name)
     for instance, data in site.items():
-        if instance in ["bsm"]:
+        if instance in ["bsm", "edge"]:
             continue
         if data.get("bsm"):
             old_bsm = data["bsm"]
@@ -250,6 +254,9 @@ def process_site(server: PyONMS, group_name: str, site: dict) -> str:  # noqa C9
             else:
                 new_bsm = BusinessServiceRequest(name=data["service_name"])
         new_bsm.add_attribute(Attribute(key="model", value="device"))
+        if "edge" in site.keys():
+            for node in site["edge"]["nodes"]:
+                data["nodes"].append(node)
         for node in data["nodes"]:
             for ip in node["node"].ipInterfaces:
                 if ip.snmpPrimary.value == "P":
@@ -285,7 +292,7 @@ def process_site(server: PyONMS, group_name: str, site: dict) -> str:  # noqa C9
 
 
 def group_site_services(server: PyONMS, group_name: str, site: dict):  # noqa C901
-    if len([id for id in site.keys() if id != "bsm"]) < 2:
+    if len([id for id in site.keys() if id not in ["bsm", "edge"]]) < 2:
         return group_name
     logger = setup_logging(instance_name=server.name, process=group_name)
     if isinstance(site.get("bsm"), BusinessService):
@@ -296,7 +303,7 @@ def group_site_services(server: PyONMS, group_name: str, site: dict):  # noqa C9
         new_bsm = BusinessServiceRequest(name=group_name)
     new_bsm.add_attribute(Attribute(key="model", value="site"))
     for instance, data in site.items():
-        if instance in ["bsm"]:
+        if instance in ["bsm", "edge"]:
             continue
         if data.get("bsm"):
             new_bsm.update_edge(child_edge=ChildEdgeRequest(child_id=data["bsm"].id))
